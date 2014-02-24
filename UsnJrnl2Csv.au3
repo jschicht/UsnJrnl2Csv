@@ -1,7 +1,8 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+#AutoIt3Wrapper_UseX64=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.2
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.3
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Include <WinAPIEx.au3>
@@ -12,7 +13,7 @@
 #include <GuiEdit.au3>
 #Include <FileConstants.au3>
 Global $UsnJrnlCsv, $UsnJrnlCsvFile, $UsnJrnlDbfile, $de="|", $sOutputFile, $VerboseOn=false, $SurroundingQuotes=True, $PreviousUsn, $DoDefaultAll, $dol2t, $DoBodyfile
-Global $_COMMON_KERNEL32DLL=DllOpen("kernel32.dll"), $outputpath=@ScriptDir, $File, $MaxRecords, $CurrentPage, $WithQuotes
+Global $_COMMON_KERNEL32DLL=DllOpen("kernel32.dll"), $outputpath=@ScriptDir, $File, $MaxRecords, $CurrentPage, $WithQuotes, $EncodingWhenOpen=2
 Global $ProgressStatus, $ProgressUsnJrnl
 Global $begin, $ElapsedTime
 Global $tDelta = _WinTime_GetUTCToLocalFileTimeDelta()
@@ -20,7 +21,7 @@ Global $DateTimeFormat,$ExampleTimestampVal = "01CD74B3150770B8",$TimestampPreci
 Global $Record_Size = 4096, $Remainder="", $nBytes
 Global $ParserOutDir = @ScriptDir
 
-$Form = GUICreate("UsnJrnl2Csv 1.0.0.2", 540, 350, -1, -1)
+$Form = GUICreate("UsnJrnl2Csv 1.0.0.3", 540, 350, -1, -1)
 
 $LabelTimestampFormat = GUICtrlCreateLabel("Timestamp format:",20,20,90,20)
 $ComboTimestampFormat = GUICtrlCreateCombo("", 110, 20, 30, 25)
@@ -38,6 +39,8 @@ $SaparatorInput2 = GUICtrlCreateInput($de,120,70,30,20)
 GUICtrlSetState($SaparatorInput2, $GUI_DISABLE)
 $checkquotes = GUICtrlCreateCheckbox("Quotation mark", 180, 70, 100, 20)
 GUICtrlSetState($checkquotes, $GUI_CHECKED)
+$CheckUnicode = GUICtrlCreateCheckbox("Unicode", 290, 70, 60, 20)
+GUICtrlSetState($CheckUnicode, $GUI_UNCHECKED)
 
 $checkl2t = GUICtrlCreateCheckbox("log2timeline", 20, 100, 130, 20)
 GUICtrlSetState($checkl2t, $GUI_UNCHECKED)
@@ -104,13 +107,22 @@ Func _Main()
 	Else
 		$WithQuotes=False
 	EndIf
+
+	If GUICtrlRead($CheckUnicode) = 1 Then
+		$EncodingWhenOpen = 2+32
+		_DisplayInfo("UNICODE configured" & @CRLF)
+	Else
+		$EncodingWhenOpen = 2
+		_DisplayInfo("ANSI configured" & @CRLF)
+	EndIf
+
 	If Not FileExists($File) Then
 		_DisplayInfo("Error: No $UsnJrnl chosen for input" & @CRLF)
 		Return
 	EndIf
 	$TimestampStart = @YEAR & "-" & @MON & "-" & @MDAY & "_" & @HOUR & "-" & @MIN & "-" & @SEC
 	$UsnJrnlCsvFile = $ParserOutDir & "\UsnJrnl_"&$TimestampStart&".csv"
-	$UsnJrnlCsv = FileOpen($UsnJrnlCsvFile, 2)
+	$UsnJrnlCsv = FileOpen($UsnJrnlCsvFile, $EncodingWhenOpen)
 	If @error Then
 		_DisplayInfo("Error creating: " & $UsnJrnlCsvFile & @CRLF)
 		Return
