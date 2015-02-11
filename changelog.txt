@@ -1,5 +1,6 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.4. Added support for configuring (millisec) precision separator.
 1.0.0.3. Added unicode support.
 1.0.0.2. Fixed bug that caused not all records to be processed. 
 1.0.0.1. Fixed a bug with the quotes around values. Added nicer GUI with progressbar. Added more options for outputted timestamps, like UTC region, timestamp format and precision. And configurable separator. 

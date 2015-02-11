@@ -16,7 +16,7 @@ The tool in the current form, writes all the variables in the structure with the
 
 I have found these to be of insignificant value, however if there is a special need for it to be included, let me know and I may consider activating it. 
 
-Timestamps are written UTC 0.00 by default, but can be configured to anything. The format and precision of the timestamps can also cofigured. See displayed examples in the gui. 
+Timestamps are written UTC 0.00 by default, but can be configured to anything. The format and precision of the timestamps can also be configured, as well as the millisec/precision separator. See displayed examples in the gui. 
 
 Requirements
 The journal must have been extracted beforehand by another tool. If you know the MFT reference number of the file, you can retrieve the file with:

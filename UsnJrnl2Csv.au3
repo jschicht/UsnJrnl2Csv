@@ -1,8 +1,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
-#AutoIt3Wrapper_UseX64=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.3
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.4
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Include <WinAPIEx.au3>
@@ -12,7 +11,7 @@
 #include <EditConstants.au3>
 #include <GuiEdit.au3>
 #Include <FileConstants.au3>
-Global $UsnJrnlCsv, $UsnJrnlCsvFile, $UsnJrnlDbfile, $de="|", $sOutputFile, $VerboseOn=false, $SurroundingQuotes=True, $PreviousUsn, $DoDefaultAll, $dol2t, $DoBodyfile
+Global $UsnJrnlCsv, $UsnJrnlCsvFile, $UsnJrnlDbfile, $de="|", $PrecisionSeparator=".", $sOutputFile, $VerboseOn=false, $SurroundingQuotes=True, $PreviousUsn, $DoDefaultAll, $dol2t, $DoBodyfile
 Global $_COMMON_KERNEL32DLL=DllOpen("kernel32.dll"), $outputpath=@ScriptDir, $File, $MaxRecords, $CurrentPage, $WithQuotes, $EncodingWhenOpen=2
 Global $ProgressStatus, $ProgressUsnJrnl
 Global $begin, $ElapsedTime
@@ -21,13 +20,17 @@ Global $DateTimeFormat,$ExampleTimestampVal = "01CD74B3150770B8",$TimestampPreci
 Global $Record_Size = 4096, $Remainder="", $nBytes
 Global $ParserOutDir = @ScriptDir
 
-$Form = GUICreate("UsnJrnl2Csv 1.0.0.3", 540, 350, -1, -1)
+$Form = GUICreate("UsnJrnl2Csv 1.0.0.4", 540, 350, -1, -1)
 
 $LabelTimestampFormat = GUICtrlCreateLabel("Timestamp format:",20,20,90,20)
 $ComboTimestampFormat = GUICtrlCreateCombo("", 110, 20, 30, 25)
 $LabelTimestampPrecision = GUICtrlCreateLabel("Precision:",150,20,50,20)
 $ComboTimestampPrecision = GUICtrlCreateCombo("", 200, 20, 70, 25)
-$InputExampleTimestamp = GUICtrlCreateInput("",340,20,190,20)
+
+$LabelPrecisionSeparator = GUICtrlCreateLabel("Precision separator:",300,20,100,20)
+$PrecisionSeparatorInput = GUICtrlCreateInput($PrecisionSeparator,400,20,20,20)
+
+$InputExampleTimestamp = GUICtrlCreateInput("",340,45,190,20)
 GUICtrlSetState($InputExampleTimestamp, $GUI_DISABLE)
 
 $Label1 = GUICtrlCreateLabel("Set decoded timestamps to specific region:",20,45,230,20)
@@ -61,6 +64,7 @@ _GUICtrlEdit_SetLimitText($myctredit, 128000)
 _InjectTimeZoneInfo()
 _InjectTimestampFormat()
 _InjectTimestampPrecision()
+$PrecisionSeparator = GUICtrlRead($PrecisionSeparatorInput)
 _TranslateTimestamp()
 
 GUISetState(@SW_SHOW)
@@ -69,6 +73,7 @@ While 1
 	$nMsg = GUIGetMsg()
 	Sleep(100)
 	_TranslateSeparator()
+	$PrecisionSeparator = GUICtrlRead($PrecisionSeparatorInput)
 	_TranslateTimestamp()
 	Select
 		Case $nMsg = $ButtonOutput
@@ -100,6 +105,15 @@ Func _Main()
 		$DoBodyfile = True
 	ElseIf GUICtrlRead($checkdefaultall) = 1 Then
 		$DoDefaultAll = True
+	EndIf
+
+	If StringLen(GUICtrlRead($PrecisionSeparatorInput)) <> 1 Then
+		_DisplayInfo("Error: Precision separator not set properly" & @crlf)
+;		_DebugOut("Error: Precision separator not set properly: " & GUICtrlRead($PrecisionSeparatorInput))
+		Return
+	Else
+		$PrecisionSeparator = GUICtrlRead($PrecisionSeparatorInput)
+;		_DebugOut("Using precision separator: " & $PrecisionSeparator)
 	EndIf
 
 	If GUICtrlRead($checkquotes) = 1 Then
@@ -528,7 +542,8 @@ Func _WinTime_FormatTime($iYear,$iMonth,$iDay,$iHour,$iMin,$iSec,$iMilSec,$iDayO
 		$sDateTimeStr&=$iYear&' '&$sHH&':'&$sMin
 		If $iPrecision Then
 			$sDateTimeStr&=':'&$sSS
-			If $iPrecision>1 Then $sDateTimeStr&=':'&$sMS
+;			If $iPrecision>1 Then $sDateTimeStr&=':'&$sMS
+			If $iPrecision>1 Then $sDateTimeStr&=$PrecisionSeparator&$sMS
 		EndIf
 		$sDateTimeStr&=$sAMPM
 	EndIf
