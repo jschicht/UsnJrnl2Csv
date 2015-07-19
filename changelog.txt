@@ -1,5 +1,17 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.5.
+Added 4 remaining structure members to the output; MajorVersion, MinorVersion, SourceInfo and SecurityId.
+Fixed gui to show 100 % when parsing is done. 
+Added total entries parsed to the gui update.
+Implemented a log file for verbose output.
+Fixed bug that caused configured UTC configuration to always be 0.00.
+Added error checking (data sanity) of parsed entries.
+Added optional configuration of USN_PAGE_SIZE.
+Aded missing reason code for USN_REASON_TRANSACTED_CHANGE.
+Added a field for file offset in output.
+Fixed a bug that caused the last record per usn page to sometimes not be processed.
+Added 2 options for scan modes for handling damaged input data.
 1.0.0.4. Added support for configuring (millisec) precision separator.
 1.0.0.3. Added unicode support.
 1.0.0.2. Fixed bug that caused not all records to be processed. 

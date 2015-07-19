@@ -1,7 +1,8 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+#AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.4
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.5
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Include <WinAPIEx.au3>
@@ -11,16 +12,16 @@
 #include <EditConstants.au3>
 #include <GuiEdit.au3>
 #Include <FileConstants.au3>
-Global $UsnJrnlCsv, $UsnJrnlCsvFile, $UsnJrnlDbfile, $de="|", $PrecisionSeparator=".", $sOutputFile, $VerboseOn=false, $SurroundingQuotes=True, $PreviousUsn, $DoDefaultAll, $dol2t, $DoBodyfile
-Global $_COMMON_KERNEL32DLL=DllOpen("kernel32.dll"), $outputpath=@ScriptDir, $File, $MaxRecords, $CurrentPage, $WithQuotes, $EncodingWhenOpen=2
+Global $UsnJrnlCsv, $UsnJrnlCsvFile, $UsnJrnlDbfile, $de="|", $PrecisionSeparator=".", $sOutputFile, $VerboseOn=false, $SurroundingQuotes=True, $PreviousUsn, $DoDefaultAll, $dol2t, $DoBodyfile, $DebugOutFile
+Global $_COMMON_KERNEL32DLL=DllOpen("kernel32.dll"), $outputpath=@ScriptDir, $File, $MaxPages, $CurrentPage, $WithQuotes, $EncodingWhenOpen=2
 Global $ProgressStatus, $ProgressUsnJrnl
-Global $begin, $ElapsedTime
+Global $begin, $ElapsedTime, $EntryCounter, $DoScanMode1=0, $DoScanMode2=0, $DoNormalMode=1, $SectorSize=512
 Global $tDelta = _WinTime_GetUTCToLocalFileTimeDelta()
 Global $DateTimeFormat,$ExampleTimestampVal = "01CD74B3150770B8",$TimestampPrecision, $UTCconfig
-Global $Record_Size = 4096, $Remainder="", $nBytes
+Global $USN_Page_Size = 4096, $Remainder="", $nBytes
 Global $ParserOutDir = @ScriptDir
 
-$Form = GUICreate("UsnJrnl2Csv 1.0.0.4", 540, 350, -1, -1)
+$Form = GUICreate("UsnJrnl2Csv 1.0.0.5", 540, 350, -1, -1)
 
 $LabelTimestampFormat = GUICtrlCreateLabel("Timestamp format:",20,20,90,20)
 $ComboTimestampFormat = GUICtrlCreateCombo("", 110, 20, 30, 25)
@@ -55,6 +56,15 @@ $checkdefaultall = GUICtrlCreateCheckbox("dump everything", 20, 140, 130, 20)
 GUICtrlSetState($checkdefaultall, $GUI_CHECKED)
 GUICtrlSetState($checkdefaultall, $GUI_DISABLE)
 
+$LabelBrokenData = GUICtrlCreateLabel("Broken data:",150,100,65,20)
+$CheckScanMode1 = GUICtrlCreateCheckbox("Scan mode 1", 220, 100, 80, 20)
+GUICtrlSetState($CheckScanMode1, $GUI_UNCHECKED)
+$CheckScanMode2 = GUICtrlCreateCheckbox("Scan mode 2", 220, 120, 80, 20)
+GUICtrlSetState($CheckScanMode2, $GUI_UNCHECKED)
+
+$LabelUsnPageSize = GUICtrlCreateLabel("USN_PAGE_SIZE:",150,145,100,20)
+$UsnPageSizeInput = GUICtrlCreateInput($USN_Page_Size,250,145,40,20)
+
 $ButtonOutput = GUICtrlCreateButton("Change Output", 400, 70, 100, 20)
 $ButtonInput = GUICtrlCreateButton("Browse $UsnJrnl", 400, 100, 100, 20)
 $ButtonStart = GUICtrlCreateButton("Start Parsing", 400, 130, 100, 20)
@@ -83,7 +93,7 @@ While 1
 				$ParserOutDir = $newoutputpath
 			EndIf
 		Case $nMsg = $ButtonInput
-			$File = FileOpenDialog("Select file",@ScriptDir,"All (*.*)")
+			$File = FileOpenDialog("Select $UsnJrnl file",@ScriptDir,"All (*.*)")
 			If Not @error Then _DisplayInfo("Input: " & $File & @CRLF)
 		Case $nMsg = $ButtonStart
 			_Main()
@@ -93,6 +103,7 @@ While 1
 WEnd
 
 Func _Main()
+	Global $EntryCounter=0
 	GUICtrlSetData($ProgressUsnJrnl, 0)
 
 	If Int(GUICtrlRead($checkl2t) + GUICtrlRead($checkbodyfile) + GUICtrlRead($checkdefaultall)) <> 9 Then
@@ -107,20 +118,18 @@ Func _Main()
 		$DoDefaultAll = True
 	EndIf
 
-	If StringLen(GUICtrlRead($PrecisionSeparatorInput)) <> 1 Then
-		_DisplayInfo("Error: Precision separator not set properly" & @crlf)
-;		_DebugOut("Error: Precision separator not set properly: " & GUICtrlRead($PrecisionSeparatorInput))
+	$USN_Page_Size = GUICtrlRead($UsnPageSizeInput)
+	If Mod($USN_Page_Size,512) Then
+		_DisplayInfo("Error: USN_PAGE_SIZE must be a multiple of 512" & @CRLF)
 		Return
-	Else
-		$PrecisionSeparator = GUICtrlRead($PrecisionSeparatorInput)
-;		_DebugOut("Using precision separator: " & $PrecisionSeparator)
 	EndIf
 
-	If GUICtrlRead($checkquotes) = 1 Then
-		$WithQuotes=True
-	Else
-		$WithQuotes=False
+	$tDelta = _GetUTCRegion()-$tDelta
+	If @error Then
+		_DisplayInfo("Error: Timezone configuration failed." & @CRLF)
+		Return
 	EndIf
+	$tDelta = $tDelta*-1 ;Since delta is substracted from timestamp later on
 
 	If GUICtrlRead($CheckUnicode) = 1 Then
 		$EncodingWhenOpen = 2+32
@@ -130,17 +139,78 @@ Func _Main()
 		_DisplayInfo("ANSI configured" & @CRLF)
 	EndIf
 
+	If StringLen(GUICtrlRead($PrecisionSeparatorInput)) <> 1 Then
+		_DisplayInfo("Error: Precision separator not set properly" & @crlf)
+		Return
+	Else
+		$PrecisionSeparator = GUICtrlRead($PrecisionSeparatorInput)
+	EndIf
+
+	If GUICtrlRead($checkquotes) = 1 Then
+		$WithQuotes=True
+	Else
+		$WithQuotes=False
+	EndIf
+
 	If Not FileExists($File) Then
 		_DisplayInfo("Error: No $UsnJrnl chosen for input" & @CRLF)
 		Return
 	EndIf
+
 	$TimestampStart = @YEAR & "-" & @MON & "-" & @MDAY & "_" & @HOUR & "-" & @MIN & "-" & @SEC
+
 	$UsnJrnlCsvFile = $ParserOutDir & "\UsnJrnl_"&$TimestampStart&".csv"
 	$UsnJrnlCsv = FileOpen($UsnJrnlCsvFile, $EncodingWhenOpen)
 	If @error Then
 		_DisplayInfo("Error creating: " & $UsnJrnlCsvFile & @CRLF)
 		Return
 	EndIf
+
+	$DebugOutFile = FileOpen($ParserOutDir & "\UsnJrnl_"&$TimestampStart&".log", $EncodingWhenOpen)
+	If @error Then
+		MsgBox(0,"Error","Could not create log file")
+		Exit
+	EndIf
+
+	_DumpOutput("Using $UsnJrnl: " & $File & @CRLF)
+
+	If GUICtrlRead($CheckUnicode) = 1 Then
+		_DumpOutput("Unicode: 1" & @CRLF)
+	Else
+		_DumpOutput("Unicode: 0" & @CRLF)
+	EndIf
+
+	_DumpOutput("Quotes configuration: " & $WithQuotes & @CRLF)
+	_DumpOutput("USN_PAGE_SIZE: " & $USN_Page_Size & @CRLF)
+
+	If GUICtrlRead($CheckScanMode1) = 1 And GUICtrlRead($CheckScanMode2) = 1 Then
+		_DisplayInfo("Error: only 1 scan mode possible" & @CRLF)
+		Return
+	EndIf
+
+	If GUICtrlRead($CheckScanMode1) = 1 Then
+		$DoScanMode1 = 1
+		$DoNormalMode = 0
+	EndIf
+
+	If GUICtrlRead($CheckScanMode2) = 1 Then
+		$DoScanMode2 = 1
+		$DoNormalMode = 0
+	EndIf
+
+	If $DoScanMode1=0 And $DoScanMode2=0 Then
+		$DoNormalMode=1
+	EndIf
+
+	_DumpOutput("Normal mode: " & $DoNormalMode & @CRLF)
+	_DumpOutput("Scan mode 1: " & $DoScanMode1 & @CRLF)
+	_DumpOutput("Scan mode 2: " & $DoScanMode2 & @CRLF)
+
+	_DumpOutput("Using DateTime format: " & $DateTimeFormat & @CRLF)
+	_DumpOutput("Using timestamp precision: " & $TimestampPrecision & @CRLF)
+	_DumpOutput("Timestamps presented in UTC: " & $UTCconfig & @CRLF)
+	_DumpOutput("Using precision separator: " & $PrecisionSeparator & @CRLF)
+	_DumpOutput("------------------- END CONFIGURATION -----------------------" & @CRLF)
 
 	$Progress = GUICtrlCreateLabel("Decoding $UsnJrnl info and writing to csv", 10, 280,540,20)
 	GUICtrlSetFont($Progress, 12)
@@ -149,57 +219,88 @@ Func _Main()
 	$ProgressUsnJrnl = GUICtrlCreateProgress(0,  315, 540, 30)
 	$begin = TimerInit()
 
-	$tBuffer = DllStructCreate("byte[" & $Record_Size & "]")
 	$hFile = _WinAPI_CreateFile("\\.\" & $File,2,2,7)
 	If $hFile = 0 Then
 		_DisplayInfo("Error: Creating handle on file" & @CRLF)
 		Return
 	EndIf
+
 	_WriteCSVHeader()
+
 	$InputFileSize = _WinAPI_GetFileSizeEx($hFile)
+	_DumpOutput("InputFileSize: " & $InputFileSize & " bytes" & @CRLF)
+
 	AdlibRegister("_UsnJrnlProgress", 500)
-	$MaxRecords = Ceiling($InputFileSize/$Record_Size)
-	For $i = 0 To $MaxRecords-1
-		$CurrentPage=$i
-		_WinAPI_SetFilePointerEx($hFile, $i*$Record_Size, $FILE_BEGIN)
-		If $i = $MaxRecords-1 Then $tBuffer = DllStructCreate("byte[" & $Record_Size & "]")
-		_WinAPI_ReadFile($hFile, DllStructGetPtr($tBuffer), $Record_Size, $nBytes)
-		$RawPage = DllStructGetData($tBuffer, 1)
-		_UsnProcessPage(StringMid($RawPage,3))
-	Next
-	ProgressOff()
+
+	Select
+
+		Case $DoNormalMode
+			$tBuffer = DllStructCreate("byte[" & $USN_Page_Size & "]")
+			$MaxPages = Ceiling($InputFileSize/$USN_Page_Size)
+			For $i = 0 To $MaxPages-1
+				$CurrentPage=$i
+				_WinAPI_SetFilePointerEx($hFile, $i*$USN_Page_Size, $FILE_BEGIN)
+				If $i = $MaxPages-1 Then $tBuffer = DllStructCreate("byte[" & $USN_Page_Size & "]")
+				_WinAPI_ReadFile($hFile, DllStructGetPtr($tBuffer), $USN_Page_Size, $nBytes)
+				$RawPage = DllStructGetData($tBuffer, 1)
+				$EntryCounter += _UsnProcessPage(StringMid($RawPage,3),$i*$USN_Page_Size,0)
+			Next
+
+		Case $DoScanMode1
+			$tBuffer = DllStructCreate("byte[" & $USN_Page_Size & "]")
+			$MaxPages = Ceiling($InputFileSize/$USN_Page_Size)
+			For $i = 0 To $MaxPages-1
+				$CurrentPage=$i
+				_WinAPI_SetFilePointerEx($hFile, $i*$USN_Page_Size, $FILE_BEGIN)
+				If $i = $MaxPages-1 Then $tBuffer = DllStructCreate("byte[" & $USN_Page_Size & "]")
+				_WinAPI_ReadFile($hFile, DllStructGetPtr($tBuffer), $USN_Page_Size, $nBytes)
+				$RawPage = DllStructGetData($tBuffer, 1)
+				$TestOffset = _ScanModeUsnProcessPage(StringMid($RawPage,3))
+				If Not @error Then
+					$EntryCounter += _UsnProcessPage(StringMid($RawPage,3+$TestOffset),$i*$USN_Page_Size,$TestOffset)
+				EndIf
+			Next
+
+		Case $DoScanMode2
+			$tBuffer = DllStructCreate("byte[" & $SectorSize & "]")
+			$MaxPages = Ceiling($InputFileSize/$SectorSize)
+			For $i = 0 To $MaxPages-1
+				$CurrentPage=$i
+				_WinAPI_SetFilePointerEx($hFile, $i*$SectorSize, $FILE_BEGIN)
+				If $i = $MaxPages-1 Then $tBuffer = DllStructCreate("byte[" & $SectorSize & "]")
+				_WinAPI_ReadFile($hFile, DllStructGetPtr($tBuffer), $SectorSize, $nBytes)
+				$RawPage = DllStructGetData($tBuffer, 1)
+				$TestOffset = _ScanModeUsnProcessPage(StringMid($RawPage,3))
+				If Not @error Then
+					$EntryCounter += _UsnProcessPage(StringMid($RawPage,3+$TestOffset),$i*$SectorSize,$TestOffset)
+				EndIf
+			Next
+
+	EndSelect
+
 	AdlibUnRegister("_UsnJrnlProgress")
+	$MaxPages = $CurrentPage
+	_UsnJrnlProgress()
+	ProgressOff()
+
+	_DisplayInfo("Entries parsed: " & $EntryCounter & @CRLF)
+	_DumpOutput("Entries parsed: " & $EntryCounter & @CRLF)
 	_DisplayInfo("Parsing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+	_DumpOutput("Parsing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
 	_WinAPI_CloseHandle($hFile)
 	FileFlush($UsnJrnlCsv)
 	FileClose($UsnJrnlCsv)
 	Return
 EndFunc
 
-Func _UsnProcessPage($TargetPage)
-	Local $LocalUsnPart = 0, $NextOffset = 1, $TotalSizeOfPage = StringLen($TargetPage)
-	Do
-		$LocalUsnPart+=1
-		$SizeOfNextUsnRecord = StringMid($TargetPage,$NextOffset,8)
-		$SizeOfNextUsnRecord = Dec(_SwapEndian($SizeOfNextUsnRecord),2)
-		If $SizeOfNextUsnRecord = 0 Then ExitLoop
-		$SizeOfNextUsnRecord = $SizeOfNextUsnRecord*2
-		$NextUsnRecord = StringMid($TargetPage,$NextOffset,$SizeOfNextUsnRecord)
-		$FileNameLength = StringMid($TargetPage,$NextOffset+112,4)
-		$FileNameLength = Dec(_SwapEndian($FileNameLength),2)
-		$TestOffset = 60+$FileNameLength
-		If $NextOffset+$SizeOfNextUsnRecord >= $TotalSizeOfPage Then Return
-		_UsnDecodeRecord($NextUsnRecord)
-		$NextOffset+=$SizeOfNextUsnRecord
-	Until $NextOffset >= $TotalSizeOfPage
-	Return ""
-EndFunc
-
-Func _UsnDecodeRecord($Record)
-	$UsnJrnlRecordLength = StringMid($Record,1,8)
-	$UsnJrnlRecordLength = Dec(_SwapEndian($UsnJrnlRecordLength),2)
-;	$UsnJrnlMajorVersion = StringMid($Record,9,4)
-;	$UsnJrnlMinorVersion = StringMid($Record,13,4)
+Func _UsnDecodeRecord($Record, $OffsetRecord)
+	Local $DecodeOk=False
+;	$UsnJrnlRecordLength = StringMid($Record,1,8)
+;	$UsnJrnlRecordLength = Dec(_SwapEndian($UsnJrnlRecordLength),2)
+	$UsnJrnlMajorVersion = StringMid($Record,9,4)
+	$UsnJrnlMajorVersion = Dec(_SwapEndian($UsnJrnlMajorVersion),2)
+	$UsnJrnlMinorVersion = StringMid($Record,13,4)
+	$UsnJrnlMinorVersion = Dec(_SwapEndian($UsnJrnlMinorVersion),2)
 	$UsnJrnlFileReferenceNumber = StringMid($Record,17,12)
 	$UsnJrnlFileReferenceNumber = Dec(_SwapEndian($UsnJrnlFileReferenceNumber),2)
 	$UsnJrnlMFTReferenceSeqNo = StringMid($Record,29,4)
@@ -210,46 +311,56 @@ Func _UsnDecodeRecord($Record)
 	$UsnJrnlParentReferenceSeqNo = Dec(_SwapEndian($UsnJrnlParentReferenceSeqNo),2)
 	$UsnJrnlUsn = StringMid($Record,49,16)
 	$UsnJrnlUsn = Dec(_SwapEndian($UsnJrnlUsn),2)
-;	If $i = 1704000 Then $PreviousUsn = $UsnJrnlUsn
-;	If $PreviousUsn < $UsnJrnlUsn Then Exit
-;	$PreviousUsn = $UsnJrnlUsn
 	$UsnJrnlTimestamp = StringMid($Record,65,16)
 	$UsnJrnlTimestamp = _DecodeTimestamp($UsnJrnlTimestamp)
 	$UsnJrnlReason = StringMid($Record,81,8)
 	$UsnJrnlReason = _DecodeReasonCodes("0x"&_SwapEndian($UsnJrnlReason))
-;	$UsnJrnlSourceInfo = StringMid($Record,89,8)
+	$UsnJrnlSourceInfo = StringMid($Record,89,8)
 ;	$UsnJrnlSourceInfo = _DecodeSourceInfoFlag("0x"&_SwapEndian($UsnJrnlSourceInfo))
-;	$UsnJrnlSourceInfo = "0x"&_SwapEndian($UsnJrnlSourceInfo)
-;	$UsnJrnlSecurityId = StringMid($Record,97,8)
+	$UsnJrnlSourceInfo = "0x"&_SwapEndian($UsnJrnlSourceInfo)
+	$UsnJrnlSecurityId = StringMid($Record,97,8)
+	$UsnJrnlSecurityId = Dec(_SwapEndian($UsnJrnlSecurityId),2)
 	$UsnJrnlFileAttributes = StringMid($Record,105,8)
 	$UsnJrnlFileAttributes = _File_Attributes("0x"&_SwapEndian($UsnJrnlFileAttributes))
 	$UsnJrnlFileNameLength = StringMid($Record,113,4)
 	$UsnJrnlFileNameLength = Dec(_SwapEndian($UsnJrnlFileNameLength),2)
-	$UsnJrnlFileNameOffset = StringMid($Record,117,4)
-	$UsnJrnlFileNameOffset = Dec(_SwapEndian($UsnJrnlFileNameOffset),2)
+;	$UsnJrnlFileNameOffset = StringMid($Record,117,4)
+;	$UsnJrnlFileNameOffset = Dec(_SwapEndian($UsnJrnlFileNameOffset),2)
 	$UsnJrnlFileName = StringMid($Record,121,$UsnJrnlFileNameLength*2)
-	$UsnJrnlFileName = _UnicodeHexToStr($UsnJrnlFileName)
+	$UsnJrnlFileName = BinaryToString("0x"&$UsnJrnlFileName,2)
+	#cs
 	If $VerboseOn Then
-		ConsoleWrite("$UsnJrnlFileReferenceNumber: " & $UsnJrnlFileReferenceNumber & @CRLF)
-		ConsoleWrite("$UsnJrnlMFTReferenceSeqNo: " & $UsnJrnlMFTReferenceSeqNo & @CRLF)
-		ConsoleWrite("$UsnJrnlParentFileReferenceNumber: " & $UsnJrnlParentFileReferenceNumber & @CRLF)
-		ConsoleWrite("$UsnJrnlParentReferenceSeqNo: " & $UsnJrnlParentReferenceSeqNo & @CRLF)
-		ConsoleWrite("$UsnJrnlUsn: " & $UsnJrnlUsn & @CRLF)
-		ConsoleWrite("$UsnJrnlTimestamp: " & $UsnJrnlTimestamp & @CRLF)
-		ConsoleWrite("$UsnJrnlReason: " & $UsnJrnlReason & @CRLF)
-;		ConsoleWrite("$UsnJrnlSourceInfo: " & $UsnJrnlSourceInfo & @CRLF)
-;		ConsoleWrite("$UsnJrnlSecurityId: " & $UsnJrnlSecurityId & @CRLF)
-		ConsoleWrite("$UsnJrnlFileAttributes: " & $UsnJrnlFileAttributes & @CRLF)
-		ConsoleWrite("$UsnJrnlFileName: " & $UsnJrnlFileName & @CRLF)
+		_DumpOutput("$UsnJrnlMajorVersion: " & $UsnJrnlMajorVersion & @CRLF)
+		_DumpOutput("$UsnJrnlMinorVersion: " & $UsnJrnlMinorVersion & @CRLF)
+		_DumpOutput("$UsnJrnlFileReferenceNumber: " & $UsnJrnlFileReferenceNumber & @CRLF)
+		_DumpOutput("$UsnJrnlMFTReferenceSeqNo: " & $UsnJrnlMFTReferenceSeqNo & @CRLF)
+		_DumpOutput("$UsnJrnlParentFileReferenceNumber: " & $UsnJrnlParentFileReferenceNumber & @CRLF)
+		_DumpOutput("$UsnJrnlParentReferenceSeqNo: " & $UsnJrnlParentReferenceSeqNo & @CRLF)
+		_DumpOutput("$UsnJrnlUsn: " & $UsnJrnlUsn & @CRLF)
+		_DumpOutput("$UsnJrnlTimestamp: " & $UsnJrnlTimestamp & @CRLF)
+		_DumpOutput("$UsnJrnlReason: " & $UsnJrnlReason & @CRLF)
+		_DumpOutput("$UsnJrnlSourceInfo: " & $UsnJrnlSourceInfo & @CRLF)
+		_DumpOutput("$UsnJrnlSecurityId: " & $UsnJrnlSecurityId & @CRLF)
+		_DumpOutput("$UsnJrnlFileAttributes: " & $UsnJrnlFileAttributes & @CRLF)
+		_DumpOutput("$UsnJrnlFileName: " & $UsnJrnlFileName & @CRLF)
 	EndIf
-	If $WithQuotes Then
-		FileWriteLine($UsnJrnlCsv, '"'&$UsnJrnlFileName&'"'&$de&'"'&$UsnJrnlUsn&'"'&$de&'"'&$UsnJrnlTimestamp&'"'&$de&'"'&$UsnJrnlReason&'"'&$de&'"'&$UsnJrnlFileReferenceNumber&'"'&$de&'"'&$UsnJrnlMFTReferenceSeqNo&'"'&$de&'"'&$UsnJrnlParentFileReferenceNumber&'"'&$de&'"'&$UsnJrnlParentReferenceSeqNo&'"'&$de&'"'&$UsnJrnlFileAttributes&'"'&@CRLF)
+	#ce
+	If Int($UsnJrnlFileReferenceNumber) > 0 And Int($UsnJrnlMFTReferenceSeqNo) > 0 And Int($UsnJrnlParentFileReferenceNumber) > 4 And $UsnJrnlFileNameLength > 0  And $UsnJrnlTimestamp<>"-" Then
+		$DecodeOk=True
+		If $WithQuotes Then
+			FileWriteLine($UsnJrnlCsv, '"'&$OffsetRecord&'"'&$de&'"'&$UsnJrnlFileName&'"'&$de&'"'&$UsnJrnlUsn&'"'&$de&'"'&$UsnJrnlTimestamp&'"'&$de&'"'&$UsnJrnlReason&'"'&$de&'"'&$UsnJrnlFileReferenceNumber&'"'&$de&'"'&$UsnJrnlMFTReferenceSeqNo&'"'&$de&'"'&$UsnJrnlParentFileReferenceNumber&'"'&$de&'"'&$UsnJrnlParentReferenceSeqNo&'"'&$de&'"'&$UsnJrnlFileAttributes&'"'&$de&'"'&$UsnJrnlMajorVersion&'"'&$de&'"'&$UsnJrnlMinorVersion&'"'&$de&'"'&$UsnJrnlSourceInfo&'"'&$de&'"'&$UsnJrnlSecurityId&'"'&@CRLF)
+		Else
+			FileWriteLine($UsnJrnlCsv, $OffsetRecord&$de&$UsnJrnlFileName&$de&$UsnJrnlUsn&$de&$UsnJrnlTimestamp&$de&$UsnJrnlReason&$de&$UsnJrnlFileReferenceNumber&$de&$UsnJrnlMFTReferenceSeqNo&$de&$UsnJrnlParentFileReferenceNumber&$de&$UsnJrnlParentReferenceSeqNo&$de&$UsnJrnlFileAttributes&$de&$UsnJrnlMajorVersion&$de&$UsnJrnlMinorVersion&$de&$UsnJrnlSourceInfo&$de&$UsnJrnlSecurityId&@crlf)
+		EndIf
 	Else
-		FileWriteLine($UsnJrnlCsv, $UsnJrnlFileName&$de&$UsnJrnlUsn&$de&$UsnJrnlTimestamp&$de&$UsnJrnlReason&$de&$UsnJrnlFileReferenceNumber&$de&$UsnJrnlMFTReferenceSeqNo&$de&$UsnJrnlParentFileReferenceNumber&$de&$UsnJrnlParentReferenceSeqNo&$de&$UsnJrnlFileAttributes&@crlf)
+		_DumpOutput("Error: Bad entry at offset " & $OffsetRecord & ":" & @CRLF)
+		_DumpOutput(_HexEncode("0x"&$Record) & @CRLF)
 	EndIf
+	Return $DecodeOk
 EndFunc
 
 Func _DecodeReasonCodes($USNReasonInput)
+	;ntifs.h
 	Local $USNReasonOutput = ""
 	If BitAND($USNReasonInput, 0x00008000) Then $USNReasonOutput &= 'BASIC_INFO_CHANGE+'
 	If BitAND($USNReasonInput, 0x80000000) Then $USNReasonOutput &= 'CLOSE+'
@@ -273,6 +384,7 @@ Func _DecodeReasonCodes($USNReasonInput)
 	If BitAND($USNReasonInput, 0x00000800) Then $USNReasonOutput &= 'SECURITY_CHANGE+'
 	If BitAND($USNReasonInput, 0x00200000) Then $USNReasonOutput &= 'STREAM_CHANGE+'
 	If BitAND($USNReasonInput, 0x00800000) Then $USNReasonOutput &= 'INTEGRITY_CHANGE+'
+	If BitAND($USNReasonInput, 0x00400000) Then $USNReasonOutput &= 'TRANSACTED_CHANGE+'
 	$USNReasonOutput = StringTrimRight($USNReasonOutput, 1)
 	Return $USNReasonOutput
 EndFunc
@@ -326,14 +438,6 @@ Func _DecodeTimestamp($StampDecode)
 		$StampDecode = $StampDecode & ":" & _FillZero(StringRight($StampDecode_tmp, 4))
 	EndIf
 	Return $StampDecode
-EndFunc
-
-Func _UnicodeHexToStr($FileName)
-   $str = ""
-   For $i = 1 To StringLen($FileName) Step 4
-	  $str &= ChrW(Dec(_SwapEndian(StringMid($FileName, $i, 4))))
-   Next
-   Return $str
 EndFunc
 
 Func _SwapEndian($iHex)
@@ -559,12 +663,12 @@ Func _DisplayInfo($DebugInfo)
 EndFunc
 
 Func _DisplayProgress()
-	ProgressSet(Round((($CurrentPage / $MaxRecords) * 100), 2), Round(($CurrentPage / $MaxRecords) * 100, 2) & "  % finished parsing", "")
+	ProgressSet(Round((($CurrentPage / $MaxPages) * 100), 2), Round(($CurrentPage / $MaxPages) * 100, 2) & "  % finished parsing", "")
 EndFunc
 
 Func _WriteCSVHeader()
 	If $DoDefaultAll Then
-		$UsnJrnl_Csv_Header = "FileName"&$de&"USN"&$de&"Timestamp"&$de&"Reason"&$de&"MFTReference"&$de&"MFTReferenceSeqNo"&$de&"MFTParentReference"&$de&"MFTParentReferenceSeqNo"&$de&"FileAttributes"
+		$UsnJrnl_Csv_Header = "Offset"&$de&"FileName"&$de&"USN"&$de&"Timestamp"&$de&"Reason"&$de&"MFTReference"&$de&"MFTReferenceSeqNo"&$de&"MFTParentReference"&$de&"MFTParentReferenceSeqNo"&$de&"FileAttributes"&$de&"MajorVersion"&$de&"MinorVersion"&$de&"SourceInfo"&$de&"SecurityId"
 	ElseIf $dol2t Then
 		$UsnJrnl_Csv_Header = "Date"&$de&"Time"&$de&"Timezone"&$de&"MACB"&$de&"Source"&$de&"SourceType"&$de&"Type"&$de&"User"&$de&"Host"&$de&"Short"&$de&"Desc"&$de&"Version"&$de&"Filename"&$de&"Inode"&$de&"Notes"&$de&"Format"&$de&"Extra"
 	ElseIf $DoBodyfile Then
@@ -675,7 +779,121 @@ Func _TranslateTimestamp()
 EndFunc
 
 Func _UsnJrnlProgress()
-    GUICtrlSetData($ProgressStatus, "Processing UsnJrnl record " & $CurrentPage & " of " & $MaxRecords)
+    GUICtrlSetData($ProgressStatus, "Processing UsnJrnl page " & $CurrentPage & " of " & $MaxPages & ", total entries: " & $EntryCounter)
     GUICtrlSetData($ElapsedTime, "Elapsed time = " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)))
-	GUICtrlSetData($ProgressUsnJrnl, 100 * $CurrentPage / $MaxRecords)
+	GUICtrlSetData($ProgressUsnJrnl, 100 * $CurrentPage / $MaxPages)
+EndFunc
+
+Func _DumpOutput($text)
+   ConsoleWrite($text)
+   If $DebugOutFile Then FileWrite($DebugOutFile, $text)
+EndFunc
+
+Func _UsnProcessPage($TargetPage,$OffsetFile,$OffsetChunk)
+	Local $LocalUsnCounter = 0, $NextOffset = 1, $TotalSizeOfPage = StringLen($TargetPage), $OffsetRecord=0
+;	_DumpOutput("_UsnProcessPage()" & @CRLF)
+;	_DumpOutput(_HexEncode("0x"&$TargetPage) & @CRLF)
+	Do
+		$SizeOfNextUsnRecord = StringMid($TargetPage,$NextOffset,8)
+		$SizeOfNextUsnRecord = Dec(_SwapEndian($SizeOfNextUsnRecord),2)
+		If $SizeOfNextUsnRecord = 0 Then
+;			_DumpOutput("Zero padding at offset 0x" & Hex(Int($CurrentPage*$USN_Page_Size+(($NextOffset-1)/2))) & @CRLF)
+			ExitLoop
+		EndIf
+		$SizeOfNextUsnRecord = $SizeOfNextUsnRecord*2
+		$NextUsnRecord = StringMid($TargetPage,$NextOffset,$SizeOfNextUsnRecord)
+		$FileNameLength = StringMid($TargetPage,$NextOffset+112,4)
+		$FileNameLength = Dec(_SwapEndian($FileNameLength),2)
+;		If $NextOffset+$SizeOfNextUsnRecord > $TotalSizeOfPage Then
+;			Return $LocalUsnCounter
+;		EndIf
+		$OffsetRecord = "0x" & Hex(Int($OffsetFile + ($OffsetChunk + $NextOffset)/2))
+		$LocalUsnCounter += _UsnDecodeRecord($NextUsnRecord, $OffsetRecord)
+		$NextOffset+=$SizeOfNextUsnRecord
+	Until $NextOffset-$SizeOfNextUsnRecord > $TotalSizeOfPage
+	Return $LocalUsnCounter
+EndFunc
+
+Func _ScanModeUsnProcessPage($TargetPage)
+	Local $NextOffset = 1, $TotalSizeOfPage = StringLen($TargetPage)
+	Do
+		$SizeOfNextUsnRecord = StringMid($TargetPage,$NextOffset,8)
+		$SizeOfNextUsnRecord = Dec(_SwapEndian($SizeOfNextUsnRecord),2)
+		$SizeOfNextUsnRecord = $SizeOfNextUsnRecord*2
+		$NextUsnRecord = StringMid($TargetPage,$NextOffset,$SizeOfNextUsnRecord)
+		If _ScanModeUsnDecodeRecord($NextUsnRecord) Then
+;			_DumpOutput("Found entry at offset 0x" & Hex(Int($CurrentPage*$USN_Page_Size+(($NextOffset-1)/2))) & @CRLF)
+;			_DumpOutput(_HexEncode("0x"&$NextUsnRecord) & @CRLF)
+			Return $NextOffset-1
+		Else
+;			_DumpOutput("Bad entry at offset 0x" & Hex(Int($CurrentPage*$USN_Page_Size+(($NextOffset-1)/2))) & @CRLF)
+;			_DumpOutput(_HexEncode("0x"&$NextUsnRecord) & @CRLF)
+			$NextOffset+=2
+		EndIf
+
+	Until $NextOffset >= $TotalSizeOfPage
+	Return SetError(1,0,0)
+EndFunc
+
+Func _ScanModeUsnDecodeRecord($Record)
+	$UsnJrnlRecordLength = StringMid($Record,1,8)
+	$UsnJrnlRecordLength = Dec(_SwapEndian($UsnJrnlRecordLength),2)
+	If $UsnJrnlRecordLength > $USN_Page_Size Then Return SetError(1,0,0)
+	$UsnJrnlMajorVersion = StringMid($Record,9,4)
+	$UsnJrnlMajorVersion = Dec(_SwapEndian($UsnJrnlMajorVersion),2)
+	If $UsnJrnlMajorVersion < 2 And $UsnJrnlMajorVersion > 4 Then Return SetError(1,0,0)
+;	$UsnJrnlMinorVersion = StringMid($Record,13,4)
+;	$UsnJrnlMinorVersion = Dec(_SwapEndian($UsnJrnlMinorVersion),2)
+	$UsnJrnlFileReferenceNumber = StringMid($Record,17,12)
+	$UsnJrnlFileReferenceNumber = Dec(_SwapEndian($UsnJrnlFileReferenceNumber),2)
+	If $UsnJrnlFileReferenceNumber = 0 Then Return SetError(1,0,0)
+	$UsnJrnlMFTReferenceSeqNo = StringMid($Record,29,4)
+	$UsnJrnlMFTReferenceSeqNo = Dec(_SwapEndian($UsnJrnlMFTReferenceSeqNo),2)
+	If $UsnJrnlMFTReferenceSeqNo = 0 Then Return SetError(1,0,0)
+	$UsnJrnlParentFileReferenceNumber = StringMid($Record,33,12)
+	$UsnJrnlParentFileReferenceNumber = Dec(_SwapEndian($UsnJrnlParentFileReferenceNumber),2)
+	If $UsnJrnlParentFileReferenceNumber < 5 Then Return SetError(1,0,0)
+	$UsnJrnlParentReferenceSeqNo = StringMid($Record,45,4)
+	$UsnJrnlParentReferenceSeqNo = Dec(_SwapEndian($UsnJrnlParentReferenceSeqNo),2)
+	If $UsnJrnlParentReferenceSeqNo = 0 Then Return SetError(1,0,0)
+	$UsnJrnlUsn = StringMid($Record,49,16)
+	$UsnJrnlUsn = Dec(_SwapEndian($UsnJrnlUsn),2)
+	If $UsnJrnlUsn = 0 Then Return SetError(1,0,0)
+	$UsnJrnlTimestamp = StringMid($Record,65,16)
+	$UsnJrnlTimestamp = _DecodeTimestamp($UsnJrnlTimestamp)
+	If $UsnJrnlTimestamp = "-" Then Return SetError(1,0,0)
+	$UsnJrnlReason = StringMid($Record,81,8)
+	$UsnJrnlReason = Dec(_SwapEndian($UsnJrnlReason),2)
+	If $UsnJrnlReason = 0 Then Return SetError(1,0,0)
+;	$UsnJrnlSourceInfo = StringMid($Record,89,8)
+;	$UsnJrnlSourceInfo = "0x"&_SwapEndian($UsnJrnlSourceInfo)
+;	$UsnJrnlSecurityId = StringMid($Record,97,8)
+;	$UsnJrnlSecurityId = Dec(_SwapEndian($UsnJrnlSecurityId),2)
+;	$UsnJrnlFileAttributes = StringMid($Record,105,8)
+;	$UsnJrnlFileAttributes = _File_Attributes("0x"&_SwapEndian($UsnJrnlFileAttributes))
+	$UsnJrnlFileNameLength = StringMid($Record,113,4)
+	$UsnJrnlFileNameLength = Dec(_SwapEndian($UsnJrnlFileNameLength),2)
+	If $UsnJrnlFileNameLength = 0 Then Return SetError(1,0,0)
+	$UsnJrnlFileNameOffset = StringMid($Record,117,4)
+	$UsnJrnlFileNameOffset = Dec(_SwapEndian($UsnJrnlFileNameOffset),2)
+	If $UsnJrnlFileNameOffset <> 60 Then Return SetError(1,0,0)
+	$UsnJrnlFileName = StringMid($Record,121,$UsnJrnlFileNameLength*2)
+	$UsnJrnlFileName = BinaryToString("0x"&$UsnJrnlFileName,2)
+	If @error Or $UsnJrnlFileName = "" Or StringLen($UsnJrnlFileName)>255 Then Return SetError(1,0,0)
+#cs
+;	_DumpOutput("$UsnJrnlMajorVersion: " & $UsnJrnlMajorVersion & @CRLF)
+;	_DumpOutput("$UsnJrnlMinorVersion: " & $UsnJrnlMinorVersion & @CRLF)
+	_DumpOutput("$UsnJrnlFileReferenceNumber: " & $UsnJrnlFileReferenceNumber & @CRLF)
+	_DumpOutput("$UsnJrnlMFTReferenceSeqNo: " & $UsnJrnlMFTReferenceSeqNo & @CRLF)
+	_DumpOutput("$UsnJrnlParentFileReferenceNumber: " & $UsnJrnlParentFileReferenceNumber & @CRLF)
+	_DumpOutput("$UsnJrnlParentReferenceSeqNo: " & $UsnJrnlParentReferenceSeqNo & @CRLF)
+	_DumpOutput("$UsnJrnlUsn: " & $UsnJrnlUsn & @CRLF)
+	_DumpOutput("$UsnJrnlTimestamp: " & $UsnJrnlTimestamp & @CRLF)
+;	_DumpOutput("$UsnJrnlReason: " & $UsnJrnlReason & @CRLF)
+;	_DumpOutput("$UsnJrnlSourceInfo: " & $UsnJrnlSourceInfo & @CRLF)
+;	_DumpOutput("$UsnJrnlSecurityId: " & $UsnJrnlSecurityId & @CRLF)
+;	_DumpOutput("$UsnJrnlFileAttributes: " & $UsnJrnlFileAttributes & @CRLF)
+	_DumpOutput("$UsnJrnlFileName: " & $UsnJrnlFileName & @CRLF)
+#ce
+	Return 1
 EndFunc
