@@ -2,7 +2,7 @@
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.5
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.6
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Include <WinAPIEx.au3>
@@ -21,7 +21,7 @@ Global $DateTimeFormat,$ExampleTimestampVal = "01CD74B3150770B8",$TimestampPreci
 Global $USN_Page_Size = 4096, $Remainder="", $nBytes
 Global $ParserOutDir = @ScriptDir
 
-$Form = GUICreate("UsnJrnl2Csv 1.0.0.5", 540, 350, -1, -1)
+$Form = GUICreate("UsnJrnl2Csv 1.0.0.6", 540, 350, -1, -1)
 
 $LabelTimestampFormat = GUICtrlCreateLabel("Timestamp format:",20,20,90,20)
 $ComboTimestampFormat = GUICtrlCreateCombo("", 110, 20, 30, 25)
@@ -270,10 +270,7 @@ Func _Main()
 				If $i = $MaxPages-1 Then $tBuffer = DllStructCreate("byte[" & $SectorSize & "]")
 				_WinAPI_ReadFile($hFile, DllStructGetPtr($tBuffer), $SectorSize, $nBytes)
 				$RawPage = DllStructGetData($tBuffer, 1)
-				$TestOffset = _ScanModeUsnProcessPage(StringMid($RawPage,3))
-				If Not @error Then
-					$EntryCounter += _UsnProcessPage(StringMid($RawPage,3+$TestOffset),$i*$SectorSize,$TestOffset)
-				EndIf
+				$EntryCounter += _ScanModeUsnProcessPage2(StringMid($RawPage,3),$i*$SectorSize,0)
 			Next
 
 	EndSelect
@@ -791,8 +788,6 @@ EndFunc
 
 Func _UsnProcessPage($TargetPage,$OffsetFile,$OffsetChunk)
 	Local $LocalUsnCounter = 0, $NextOffset = 1, $TotalSizeOfPage = StringLen($TargetPage), $OffsetRecord=0
-;	_DumpOutput("_UsnProcessPage()" & @CRLF)
-;	_DumpOutput(_HexEncode("0x"&$TargetPage) & @CRLF)
 	Do
 		$SizeOfNextUsnRecord = StringMid($TargetPage,$NextOffset,8)
 		$SizeOfNextUsnRecord = Dec(_SwapEndian($SizeOfNextUsnRecord),2)
@@ -804,9 +799,6 @@ Func _UsnProcessPage($TargetPage,$OffsetFile,$OffsetChunk)
 		$NextUsnRecord = StringMid($TargetPage,$NextOffset,$SizeOfNextUsnRecord)
 		$FileNameLength = StringMid($TargetPage,$NextOffset+112,4)
 		$FileNameLength = Dec(_SwapEndian($FileNameLength),2)
-;		If $NextOffset+$SizeOfNextUsnRecord > $TotalSizeOfPage Then
-;			Return $LocalUsnCounter
-;		EndIf
 		$OffsetRecord = "0x" & Hex(Int($OffsetFile + ($OffsetChunk + $NextOffset)/2))
 		$LocalUsnCounter += _UsnDecodeRecord($NextUsnRecord, $OffsetRecord)
 		$NextOffset+=$SizeOfNextUsnRecord
@@ -833,6 +825,30 @@ Func _ScanModeUsnProcessPage($TargetPage)
 
 	Until $NextOffset >= $TotalSizeOfPage
 	Return SetError(1,0,0)
+EndFunc
+
+Func _ScanModeUsnProcessPage2($TargetPage,$OffsetFile,$OffsetChunk)
+	Local $LocalUsnCounter = 0, $NextOffset = 1, $TotalSizeOfPage = StringLen($TargetPage)
+	Do
+		$SizeOfNextUsnRecord = StringMid($TargetPage,$NextOffset,8)
+		$SizeOfNextUsnRecord = Dec(_SwapEndian($SizeOfNextUsnRecord),2)
+		$SizeOfNextUsnRecord = $SizeOfNextUsnRecord*2
+		$NextUsnRecord = StringMid($TargetPage,$NextOffset,$SizeOfNextUsnRecord)
+		If _ScanModeUsnDecodeRecord($NextUsnRecord) Then
+;			_DumpOutput("Found entry at offset 0x" & Hex(Int($CurrentPage*$USN_Page_Size+(($NextOffset-1)/2))) & @CRLF)
+;			_DumpOutput(_HexEncode("0x"&$NextUsnRecord) & @CRLF)
+			$OffsetRecord = "0x" & Hex(Int($OffsetFile + ($OffsetChunk + $NextOffset)/2))
+			$LocalUsnCounter += _UsnDecodeRecord($NextUsnRecord, $OffsetRecord)
+			$NextOffset+=$SizeOfNextUsnRecord
+;			Return $NextOffset-1
+		Else
+;			_DumpOutput("Bad entry at offset 0x" & Hex(Int($CurrentPage*$USN_Page_Size+(($NextOffset-1)/2))) & @CRLF)
+;			_DumpOutput(_HexEncode("0x"&$NextUsnRecord) & @CRLF)
+			$NextOffset+=2
+		EndIf
+
+	Until $NextOffset > $TotalSizeOfPage
+	Return $LocalUsnCounter
 EndFunc
 
 Func _ScanModeUsnDecodeRecord($Record)
@@ -879,7 +895,7 @@ Func _ScanModeUsnDecodeRecord($Record)
 	If $UsnJrnlFileNameOffset <> 60 Then Return SetError(1,0,0)
 	$UsnJrnlFileName = StringMid($Record,121,$UsnJrnlFileNameLength*2)
 	$UsnJrnlFileName = BinaryToString("0x"&$UsnJrnlFileName,2)
-	If @error Or $UsnJrnlFileName = "" Or StringLen($UsnJrnlFileName)>255 Then Return SetError(1,0,0)
+	If @error Or $UsnJrnlFileName = "" Or StringLen($UsnJrnlFileName)>$UsnJrnlRecordLength*2 Or StringLen($UsnJrnlFileName)>255 Then Return SetError(1,0,0)
 #cs
 ;	_DumpOutput("$UsnJrnlMajorVersion: " & $UsnJrnlMajorVersion & @CRLF)
 ;	_DumpOutput("$UsnJrnlMinorVersion: " & $UsnJrnlMinorVersion & @CRLF)

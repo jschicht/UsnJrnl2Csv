@@ -1,5 +1,8 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.6
+Fixed bug that caused scan mode 2 to not rescan damaged data within sector after a valid usn record was found. 
+
 1.0.0.5.
 Added 4 remaining structure members to the output; MajorVersion, MinorVersion, SourceInfo and SecurityId.
 Fixed gui to show 100 % when parsing is done. 
@@ -12,8 +15,18 @@ Aded missing reason code for USN_REASON_TRANSACTED_CHANGE.
 Added a field for file offset in output.
 Fixed a bug that caused the last record per usn page to sometimes not be processed.
 Added 2 options for scan modes for handling damaged input data.
-1.0.0.4. Added support for configuring (millisec) precision separator.
-1.0.0.3. Added unicode support.
-1.0.0.2. Fixed bug that caused not all records to be processed. 
-1.0.0.1. Fixed a bug with the quotes around values. Added nicer GUI with progressbar. Added more options for outputted timestamps, like UTC region, timestamp format and precision. And configurable separator. 
-1.0.0.0. Initial version. 
+
+1.0.0.4. 
+Added support for configuring (millisec) precision separator.
+
+1.0.0.3. 
+Added unicode support.
+
+1.0.0.2. 
+Fixed bug that caused not all records to be processed.
+
+1.0.0.1. 
+Fixed a bug with the quotes around values. Added nicer GUI with progressbar. Added more options for outputted timestamps, like UTC region, timestamp format and precision. And configurable separator.
+
+1.0.0.0. 
+Initial version. 
