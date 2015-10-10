@@ -1,5 +1,10 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.7
+Added option to specify a second precision separator, to be used as separation between MilliSec and NanoSec.
+Added option to specify a custom error value for invalid timestamps, or incorrectly decoded timestamps.
+Added 2 sql's for database schema and import of data, along with instructions for how to import the csv into a MySql database.
+
 1.0.0.6
 Fixed bug that caused scan mode 2 to not rescan damaged data within sector after a valid usn record was found. 
 

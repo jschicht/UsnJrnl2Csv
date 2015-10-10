@@ -2,7 +2,7 @@
 #AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.6
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.7
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Include <WinAPIEx.au3>
@@ -12,24 +12,27 @@
 #include <EditConstants.au3>
 #include <GuiEdit.au3>
 #Include <FileConstants.au3>
-Global $UsnJrnlCsv, $UsnJrnlCsvFile, $UsnJrnlDbfile, $de="|", $PrecisionSeparator=".", $sOutputFile, $VerboseOn=false, $SurroundingQuotes=True, $PreviousUsn, $DoDefaultAll, $dol2t, $DoBodyfile, $DebugOutFile
+Global $UsnJrnlCsv, $UsnJrnlCsvFile, $UsnJrnlDbfile, $de="|", $PrecisionSeparator=".", $PrecisionSeparator2="", $sOutputFile, $VerboseOn=false, $SurroundingQuotes=True, $PreviousUsn, $DoDefaultAll, $dol2t, $DoBodyfile, $DebugOutFile
 Global $_COMMON_KERNEL32DLL=DllOpen("kernel32.dll"), $outputpath=@ScriptDir, $File, $MaxPages, $CurrentPage, $WithQuotes, $EncodingWhenOpen=2
 Global $ProgressStatus, $ProgressUsnJrnl
 Global $begin, $ElapsedTime, $EntryCounter, $DoScanMode1=0, $DoScanMode2=0, $DoNormalMode=1, $SectorSize=512
 Global $tDelta = _WinTime_GetUTCToLocalFileTimeDelta()
 Global $DateTimeFormat,$ExampleTimestampVal = "01CD74B3150770B8",$TimestampPrecision, $UTCconfig
+Global $TimestampErrorVal = "0000-00-00 00:00:00"
 Global $USN_Page_Size = 4096, $Remainder="", $nBytes
 Global $ParserOutDir = @ScriptDir
 
-$Form = GUICreate("UsnJrnl2Csv 1.0.0.6", 540, 350, -1, -1)
+$Form = GUICreate("UsnJrnl2Csv 1.0.0.7", 540, 350, -1, -1)
 
 $LabelTimestampFormat = GUICtrlCreateLabel("Timestamp format:",20,20,90,20)
 $ComboTimestampFormat = GUICtrlCreateCombo("", 110, 20, 30, 25)
 $LabelTimestampPrecision = GUICtrlCreateLabel("Precision:",150,20,50,20)
 $ComboTimestampPrecision = GUICtrlCreateCombo("", 200, 20, 70, 25)
 
-$LabelPrecisionSeparator = GUICtrlCreateLabel("Precision separator:",300,20,100,20)
-$PrecisionSeparatorInput = GUICtrlCreateInput($PrecisionSeparator,400,20,20,20)
+$LabelPrecisionSeparator = GUICtrlCreateLabel("Precision separator:",280,20,100,20)
+$PrecisionSeparatorInput = GUICtrlCreateInput($PrecisionSeparator,380,20,15,20)
+$LabelPrecisionSeparator2 = GUICtrlCreateLabel("Precision separator2:",400,20,100,20)
+$PrecisionSeparatorInput2 = GUICtrlCreateInput($PrecisionSeparator2,505,20,15,20)
 
 $InputExampleTimestamp = GUICtrlCreateInput("",340,45,190,20)
 GUICtrlSetState($InputExampleTimestamp, $GUI_DISABLE)
@@ -41,9 +44,9 @@ $LabelSeparator = GUICtrlCreateLabel("Set separator:",20,70,70,20)
 $SaparatorInput = GUICtrlCreateInput($de,90,70,20,20)
 $SaparatorInput2 = GUICtrlCreateInput($de,120,70,30,20)
 GUICtrlSetState($SaparatorInput2, $GUI_DISABLE)
-$checkquotes = GUICtrlCreateCheckbox("Quotation mark", 180, 70, 100, 20)
+$checkquotes = GUICtrlCreateCheckbox("Quotation mark", 160, 70, 90, 20)
 GUICtrlSetState($checkquotes, $GUI_CHECKED)
-$CheckUnicode = GUICtrlCreateCheckbox("Unicode", 290, 70, 60, 20)
+$CheckUnicode = GUICtrlCreateCheckbox("Unicode", 255, 70, 60, 20)
 GUICtrlSetState($CheckUnicode, $GUI_UNCHECKED)
 
 $checkl2t = GUICtrlCreateCheckbox("log2timeline", 20, 100, 130, 20)
@@ -56,18 +59,21 @@ $checkdefaultall = GUICtrlCreateCheckbox("dump everything", 20, 140, 130, 20)
 GUICtrlSetState($checkdefaultall, $GUI_CHECKED)
 GUICtrlSetState($checkdefaultall, $GUI_DISABLE)
 
-$LabelBrokenData = GUICtrlCreateLabel("Broken data:",150,100,65,20)
-$CheckScanMode1 = GUICtrlCreateCheckbox("Scan mode 1", 220, 100, 80, 20)
+$LabelBrokenData = GUICtrlCreateLabel("Broken data:",130,100,65,20)
+$CheckScanMode1 = GUICtrlCreateCheckbox("Scan mode 1", 200, 100, 80, 20)
 GUICtrlSetState($CheckScanMode1, $GUI_UNCHECKED)
-$CheckScanMode2 = GUICtrlCreateCheckbox("Scan mode 2", 220, 120, 80, 20)
+$CheckScanMode2 = GUICtrlCreateCheckbox("Scan mode 2", 200, 120, 80, 20)
 GUICtrlSetState($CheckScanMode2, $GUI_UNCHECKED)
 
-$LabelUsnPageSize = GUICtrlCreateLabel("USN_PAGE_SIZE:",150,145,100,20)
-$UsnPageSizeInput = GUICtrlCreateInput($USN_Page_Size,250,145,40,20)
+$LabelUsnPageSize = GUICtrlCreateLabel("USN_PAGE_SIZE:",130,145,100,20)
+$UsnPageSizeInput = GUICtrlCreateInput($USN_Page_Size,230,145,40,20)
 
-$ButtonOutput = GUICtrlCreateButton("Change Output", 400, 70, 100, 20)
-$ButtonInput = GUICtrlCreateButton("Browse $UsnJrnl", 400, 100, 100, 20)
-$ButtonStart = GUICtrlCreateButton("Start Parsing", 400, 130, 100, 20)
+$LabelTimestampError = GUICtrlCreateLabel("Timestamp ErrorVal:",290,145,100,20)
+$TimestampErrorInput = GUICtrlCreateInput($TimestampErrorVal,390,145,130,20)
+
+$ButtonOutput = GUICtrlCreateButton("Change Output", 420, 70, 100, 20)
+$ButtonInput = GUICtrlCreateButton("Browse $UsnJrnl", 420, 95, 100, 20)
+$ButtonStart = GUICtrlCreateButton("Start Parsing", 420, 120, 100, 20)
 $myctredit = GUICtrlCreateEdit("Current output folder: " & $outputpath & @CRLF, 0, 170, 540, 100, BitOR($ES_AUTOVSCROLL,$WS_VSCROLL))
 _GUICtrlEdit_SetLimitText($myctredit, 128000)
 
@@ -75,6 +81,7 @@ _InjectTimeZoneInfo()
 _InjectTimestampFormat()
 _InjectTimestampPrecision()
 $PrecisionSeparator = GUICtrlRead($PrecisionSeparatorInput)
+$PrecisionSeparator2 = GUICtrlRead($PrecisionSeparatorInput2)
 _TranslateTimestamp()
 
 GUISetState(@SW_SHOW)
@@ -84,6 +91,7 @@ While 1
 	Sleep(100)
 	_TranslateSeparator()
 	$PrecisionSeparator = GUICtrlRead($PrecisionSeparatorInput)
+	$PrecisionSeparator2 = GUICtrlRead($PrecisionSeparatorInput2)
 	_TranslateTimestamp()
 	Select
 		Case $nMsg = $ButtonOutput
@@ -430,9 +438,9 @@ Func _DecodeTimestamp($StampDecode)
 	$StampDecode_tmp = _WinTime_UTCFileTimeToLocalFileTime("0x" & $StampDecode)
 	$StampDecode = _WinTime_UTCFileTimeFormat(Dec($StampDecode,2) - $tDelta, $DateTimeFormat, $TimestampPrecision)
 	If @error Then
-		$StampDecode = "-"
+		$StampDecode = $TimestampErrorVal
 	ElseIf $TimestampPrecision = 3 Then
-		$StampDecode = $StampDecode & ":" & _FillZero(StringRight($StampDecode_tmp, 4))
+		$StampDecode = $StampDecode & $PrecisionSeparator2 & _FillZero(StringRight($StampDecode_tmp, 4))
 	EndIf
 	Return $StampDecode
 EndFunc
@@ -768,9 +776,9 @@ Func _TranslateTimestamp()
 	$lTimestampTmp = _WinTime_UTCFileTimeToLocalFileTime("0x" & $ExampleTimestampVal)
 	$lTimestamp = _WinTime_UTCFileTimeFormat(Dec($ExampleTimestampVal,2), $DateTimeFormat, $TimestampPrecision)
 	If @error Then
-		$lTimestamp = "-"
+		$lTimestamp = $TimestampErrorVal
 	ElseIf $TimestampPrecision = 3 Then
-		$lTimestamp = $lTimestamp & ":" & _FillZero(StringRight($lTimestampTmp, 4))
+		$lTimestamp = $lTimestamp & $PrecisionSeparator2 & _FillZero(StringRight($lTimestampTmp, 4))
 	EndIf
 	GUICtrlSetData($InputExampleTimestamp,$lTimestamp)
 EndFunc
@@ -877,7 +885,7 @@ Func _ScanModeUsnDecodeRecord($Record)
 	If $UsnJrnlUsn = 0 Then Return SetError(1,0,0)
 	$UsnJrnlTimestamp = StringMid($Record,65,16)
 	$UsnJrnlTimestamp = _DecodeTimestamp($UsnJrnlTimestamp)
-	If $UsnJrnlTimestamp = "-" Then Return SetError(1,0,0)
+	If $UsnJrnlTimestamp = $TimestampErrorVal Then Return SetError(1,0,0)
 	$UsnJrnlReason = StringMid($Record,81,8)
 	$UsnJrnlReason = Dec(_SwapEndian($UsnJrnlReason),2)
 	If $UsnJrnlReason = 0 Then Return SetError(1,0,0)
