@@ -262,7 +262,7 @@ Func _Main()
 ;	_DumpOutput("------------------- END CONFIGURATION -----------------------" & @CRLF)
 
 	$UsnJrnlSqlFile = $ParserOutDir & "\UsnJrnl_"&$TimestampStart&".sql"
-	FileInstall("C:\tmp\NTFS\UsnJrnl2Csv_v1.0.0.8\import-csv-usnjrnl.sql", $UsnJrnlSqlFile)
+	FileInstall("C:\temp\import-csv-usnjrnl.sql", $UsnJrnlSqlFile)
 	$FixedPath = StringReplace($UsnJrnlCsvFile,"\","\\")
 	Sleep(500)
 #cs
@@ -310,7 +310,7 @@ Func _Main()
 				_WinAPI_ReadFile($hFile, DllStructGetPtr($tBuffer), $USN_Page_Size, $nBytes)
 				$RawPage = DllStructGetData($tBuffer, 1)
 				$EntryCounter += _UsnProcessPage(StringMid($RawPage,3),$i*$USN_Page_Size,0)
-				If Not Mod($i,200) Then
+				If Not Mod($i,1000) Then
 					FileFlush($UsnJrnlCsv)
 				EndIf
 			Next
@@ -328,7 +328,7 @@ Func _Main()
 				If Not @error Then
 					$EntryCounter += _UsnProcessPage(StringMid($RawPage,3+$TestOffset),$i*$USN_Page_Size,$TestOffset)
 				EndIf
-				If Not Mod($i,200) Then
+				If Not Mod($i,1000) Then
 					FileFlush($UsnJrnlCsv)
 				EndIf
 			Next
@@ -343,7 +343,7 @@ Func _Main()
 				_WinAPI_ReadFile($hFile, DllStructGetPtr($tBuffer), $SectorSize, $nBytes)
 				$RawPage = DllStructGetData($tBuffer, 1)
 				$EntryCounter += _ScanModeUsnProcessPage2(StringMid($RawPage,3),$i*$SectorSize,0)
-				If Not Mod($i,200) Then
+				If Not Mod($i,1000) Then
 					FileFlush($UsnJrnlCsv)
 				EndIf
 			Next
