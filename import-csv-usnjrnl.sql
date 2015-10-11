@@ -1,4 +1,4 @@
-LOAD DATA INFILE "C:\\tmp\\NTFS\\UsnJrnl2Csv_v1.0.0.7\\UsnJrnl_2015-10-11_00-09-01.csv"
+LOAD DATA INFILE "__PathToCsv__"
 INTO TABLE usnjrnl
 CHARACTER SET 'latin1'
 COLUMNS TERMINATED BY '|'

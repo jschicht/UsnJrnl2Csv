@@ -31,6 +31,93 @@ If you know the MFT reference number of the file, you can retrieve the file with
 2. NTFS File Extractor; https://github.com/jschicht/NtfsFileExtractor
 3. RawCopy: https://github.com/jschicht/RawCopy
 
+Command line use
+If no parameters are supplied, the GUI will by default launch. Valid switches are:
+
+Switches:
+/UsnJrnlFile:
+Input UsnJrnl file ($J stream) extracted.
+/OutputPath:
+The output path of where to put output. Defaults to program directory.
+/TimeZone:
+A string value for the timezone. See notes further down for valid values.
+/OutputFormat:
+The output format of csv. Valid values can be l2t, BodyFile, all.
+/Separator:
+The separator to use in the csv. Default is |
+/QuotationMark:
+Boolean value for surrounding values in csv with quotes. Default is 0. Can be 0 or 1.
+/Unicode:
+Boolean value for decoding unicode strings. Default is 0. Can be 0 or 1.
+/TSFormat:
+An integer from 1 - 6 for specifying the timestamp format. Start the gui to see what they mean. Default is 6.
+/TSPrecision:
+What precision to use in the timestamp. Valid values are None, MilliSec and NanoSec. Default is NanoSec.
+/TSPrecisionSeparator:
+The separator to put in the separation of the precision. Default is ".". Start the gui to see what it means.
+/TSPrecisionSeparator2:
+The separator to put in between MilliSec and NanoSec in the precision of timestamp. Default is empty/nothing. Start the gui to see what it means.
+/TSErrorVal:
+A custom error value to put with errors in timestamp decode. Default value is '0000-00-00 00:00:00', which is compatible with MySql, and represents and invalid timestamp value for NTFS.
+/UsnPageSize:
+The size of USN_PAGE_SIZE. Default is 4096, which should work in most cases.
+/ScanMode:
+Which ScanMode to enter. Default is 0, Normal mode. See explanation further up.
+
+
+The available TimeZone's to use are:
+-12.00
+-11.00
+-10.00
+-9.30
+-9.00
+-8.00
+-7.00
+-6.00
+-5.00
+-4.30
+-4.00
+-3.30
+-3.00
+-2.00
+-1.00
+0.00
+1.00
+2.00
+3.00
+3.30
+4.00
+4.30
+5.00
+5.30
+5.45
+6.00
+6.30
+7.00
+8.00
+8.45
+9.00
+9.30
+10.00
+10.30
+11.00
+11.30
+12.00
+12.45
+13.00
+14.00
+
+Examples:
+UsnJrnl2Csv.exe /UsnJrnlFile:c:\temp\$UsnJrnl_$J.bin /TimeZone:2.00 /TSFormat:1 /TSPrecision:MilliSec /Unicode:1
+UsnJrnl2Csv.exe /UsnJrnlFile:c:\temp\$UsnJrnl_$J.bin /TimeZone:-10.00 /TSFormat:4 /TSPrecision:NanoSec /Unicode:1
+UsnJrnl2Csv.exe /UsnJrnlFile:c:\temp\$UsnJrnl_$J.bin /TimeZone:3.00 /TSFormat:1 /TSPrecision:MilliSec
+UsnJrnl2Csv.exe /UsnJrnlFile:c:\temp\$UsnJrnl_$J.bin /TSFormat:2 /TSPrecision:None
+UsnJrnl2Csv.exe /UsnJrnlFile:c:\temp\$UsnJrnl_$J.bin /OutoutPath:c:\temp\UsnJrnlOutput /ScanMode:2
+UsnJrnl2Csv.exe /UsnJrnlFile:C:\temp\$UsnJrnl_$J.bin /TSPrecision:NanoSec /ScanMode:1
+
+Last example is a basic that uses common defaults that work out just fine in most cases. Also compatible with MySql imports.
+
+
 ToDo
 Add support for output format in log2timeline and bodyformat.
 Add support for USN_RECORD_V4.

@@ -1,11 +1,13 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_UseUpx=y
+#AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.7
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.8
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Include <WinAPIEx.au3>
+#Include <File.au3>
 #include <GUIConstantsEx.au3>
 #include <WindowsConstants.au3>
 #include <StaticConstants.au3>
@@ -21,147 +23,189 @@ Global $DateTimeFormat,$ExampleTimestampVal = "01CD74B3150770B8",$TimestampPreci
 Global $TimestampErrorVal = "0000-00-00 00:00:00"
 Global $USN_Page_Size = 4096, $Remainder="", $nBytes
 Global $ParserOutDir = @ScriptDir
+Global $myctredit, $CheckUnicode, $checkl2t, $checkbodyfile, $checkdefaultall, $SeparatorInput, $checkquotes
 
-$Form = GUICreate("UsnJrnl2Csv 1.0.0.7", 540, 350, -1, -1)
+$Progversion = "UsnJrnl2Csv 1.0.0.8"
+If $cmdline[0] > 0 Then
+	$CommandlineMode = 1
+	ConsoleWrite($Progversion & @CRLF)
+	_GetInputParams()
+	_Main()
+Else
+	$CommandlineMode = 0
 
-$LabelTimestampFormat = GUICtrlCreateLabel("Timestamp format:",20,20,90,20)
-$ComboTimestampFormat = GUICtrlCreateCombo("", 110, 20, 30, 25)
-$LabelTimestampPrecision = GUICtrlCreateLabel("Precision:",150,20,50,20)
-$ComboTimestampPrecision = GUICtrlCreateCombo("", 200, 20, 70, 25)
+	$Form = GUICreate($Progversion, 540, 350, -1, -1)
 
-$LabelPrecisionSeparator = GUICtrlCreateLabel("Precision separator:",280,20,100,20)
-$PrecisionSeparatorInput = GUICtrlCreateInput($PrecisionSeparator,380,20,15,20)
-$LabelPrecisionSeparator2 = GUICtrlCreateLabel("Precision separator2:",400,20,100,20)
-$PrecisionSeparatorInput2 = GUICtrlCreateInput($PrecisionSeparator2,505,20,15,20)
+	$LabelTimestampFormat = GUICtrlCreateLabel("Timestamp format:",20,20,90,20)
+	$ComboTimestampFormat = GUICtrlCreateCombo("", 110, 20, 30, 25)
+	$LabelTimestampPrecision = GUICtrlCreateLabel("Precision:",150,20,50,20)
+	$ComboTimestampPrecision = GUICtrlCreateCombo("", 200, 20, 70, 25)
 
-$InputExampleTimestamp = GUICtrlCreateInput("",340,45,190,20)
-GUICtrlSetState($InputExampleTimestamp, $GUI_DISABLE)
+	$LabelPrecisionSeparator = GUICtrlCreateLabel("Precision separator:",280,20,100,20)
+	$PrecisionSeparatorInput = GUICtrlCreateInput($PrecisionSeparator,380,20,15,20)
+	$LabelPrecisionSeparator2 = GUICtrlCreateLabel("Precision separator2:",400,20,100,20)
+	$PrecisionSeparatorInput2 = GUICtrlCreateInput($PrecisionSeparator2,505,20,15,20)
 
-$Label1 = GUICtrlCreateLabel("Set decoded timestamps to specific region:",20,45,230,20)
-$Combo2 = GUICtrlCreateCombo("", 230, 45, 85, 25)
+	$InputExampleTimestamp = GUICtrlCreateInput("",340,45,190,20)
+	GUICtrlSetState($InputExampleTimestamp, $GUI_DISABLE)
 
-$LabelSeparator = GUICtrlCreateLabel("Set separator:",20,70,70,20)
-$SaparatorInput = GUICtrlCreateInput($de,90,70,20,20)
-$SaparatorInput2 = GUICtrlCreateInput($de,120,70,30,20)
-GUICtrlSetState($SaparatorInput2, $GUI_DISABLE)
-$checkquotes = GUICtrlCreateCheckbox("Quotation mark", 160, 70, 90, 20)
-GUICtrlSetState($checkquotes, $GUI_CHECKED)
-$CheckUnicode = GUICtrlCreateCheckbox("Unicode", 255, 70, 60, 20)
-GUICtrlSetState($CheckUnicode, $GUI_UNCHECKED)
+	$Label1 = GUICtrlCreateLabel("Set decoded timestamps to specific region:",20,45,230,20)
+	$Combo2 = GUICtrlCreateCombo("", 230, 45, 85, 25)
 
-$checkl2t = GUICtrlCreateCheckbox("log2timeline", 20, 100, 130, 20)
-GUICtrlSetState($checkl2t, $GUI_UNCHECKED)
-GUICtrlSetState($checkl2t, $GUI_DISABLE)
-$checkbodyfile = GUICtrlCreateCheckbox("bodyfile", 20, 120, 130, 20)
-GUICtrlSetState($checkbodyfile, $GUI_UNCHECKED)
-GUICtrlSetState($checkbodyfile, $GUI_DISABLE)
-$checkdefaultall = GUICtrlCreateCheckbox("dump everything", 20, 140, 130, 20)
-GUICtrlSetState($checkdefaultall, $GUI_CHECKED)
-GUICtrlSetState($checkdefaultall, $GUI_DISABLE)
+	$LabelSeparator = GUICtrlCreateLabel("Set separator:",20,70,70,20)
+	$SaparatorInput = GUICtrlCreateInput($de,90,70,20,20)
+	$SaparatorInput2 = GUICtrlCreateInput($de,120,70,30,20)
+	GUICtrlSetState($SaparatorInput2, $GUI_DISABLE)
+	$checkquotes = GUICtrlCreateCheckbox("Quotation mark", 160, 70, 90, 20)
+	GUICtrlSetState($checkquotes, $GUI_CHECKED)
+	$CheckUnicode = GUICtrlCreateCheckbox("Unicode", 255, 70, 60, 20)
+	GUICtrlSetState($CheckUnicode, $GUI_UNCHECKED)
 
-$LabelBrokenData = GUICtrlCreateLabel("Broken data:",130,100,65,20)
-$CheckScanMode1 = GUICtrlCreateCheckbox("Scan mode 1", 200, 100, 80, 20)
-GUICtrlSetState($CheckScanMode1, $GUI_UNCHECKED)
-$CheckScanMode2 = GUICtrlCreateCheckbox("Scan mode 2", 200, 120, 80, 20)
-GUICtrlSetState($CheckScanMode2, $GUI_UNCHECKED)
+	$checkl2t = GUICtrlCreateCheckbox("log2timeline", 20, 100, 130, 20)
+	GUICtrlSetState($checkl2t, $GUI_UNCHECKED)
+	GUICtrlSetState($checkl2t, $GUI_DISABLE)
+	$checkbodyfile = GUICtrlCreateCheckbox("bodyfile", 20, 120, 130, 20)
+	GUICtrlSetState($checkbodyfile, $GUI_UNCHECKED)
+	GUICtrlSetState($checkbodyfile, $GUI_DISABLE)
+	$checkdefaultall = GUICtrlCreateCheckbox("dump everything", 20, 140, 130, 20)
+	GUICtrlSetState($checkdefaultall, $GUI_CHECKED)
+	GUICtrlSetState($checkdefaultall, $GUI_DISABLE)
 
-$LabelUsnPageSize = GUICtrlCreateLabel("USN_PAGE_SIZE:",130,145,100,20)
-$UsnPageSizeInput = GUICtrlCreateInput($USN_Page_Size,230,145,40,20)
+	$LabelBrokenData = GUICtrlCreateLabel("Broken data:",130,100,65,20)
+	$CheckScanMode1 = GUICtrlCreateCheckbox("Scan mode 1", 200, 100, 80, 20)
+	GUICtrlSetState($CheckScanMode1, $GUI_UNCHECKED)
+	$CheckScanMode2 = GUICtrlCreateCheckbox("Scan mode 2", 200, 120, 80, 20)
+	GUICtrlSetState($CheckScanMode2, $GUI_UNCHECKED)
 
-$LabelTimestampError = GUICtrlCreateLabel("Timestamp ErrorVal:",290,145,100,20)
-$TimestampErrorInput = GUICtrlCreateInput($TimestampErrorVal,390,145,130,20)
+	$LabelUsnPageSize = GUICtrlCreateLabel("USN_PAGE_SIZE:",130,145,100,20)
+	$UsnPageSizeInput = GUICtrlCreateInput($USN_Page_Size,230,145,40,20)
 
-$ButtonOutput = GUICtrlCreateButton("Change Output", 420, 70, 100, 20)
-$ButtonInput = GUICtrlCreateButton("Browse $UsnJrnl", 420, 95, 100, 20)
-$ButtonStart = GUICtrlCreateButton("Start Parsing", 420, 120, 100, 20)
-$myctredit = GUICtrlCreateEdit("Current output folder: " & $outputpath & @CRLF, 0, 170, 540, 100, BitOR($ES_AUTOVSCROLL,$WS_VSCROLL))
-_GUICtrlEdit_SetLimitText($myctredit, 128000)
+	$LabelTimestampError = GUICtrlCreateLabel("Timestamp ErrorVal:",290,145,100,20)
+	$TimestampErrorInput = GUICtrlCreateInput($TimestampErrorVal,390,145,130,20)
 
-_InjectTimeZoneInfo()
-_InjectTimestampFormat()
-_InjectTimestampPrecision()
-$PrecisionSeparator = GUICtrlRead($PrecisionSeparatorInput)
-$PrecisionSeparator2 = GUICtrlRead($PrecisionSeparatorInput2)
-_TranslateTimestamp()
+	$ButtonOutput = GUICtrlCreateButton("Change Output", 420, 70, 100, 20)
+	$ButtonInput = GUICtrlCreateButton("Browse $UsnJrnl", 420, 95, 100, 20)
+	$ButtonStart = GUICtrlCreateButton("Start Parsing", 420, 120, 100, 20)
+	$myctredit = GUICtrlCreateEdit("Current output folder: " & $outputpath & @CRLF, 0, 170, 540, 100, BitOR($ES_AUTOVSCROLL,$WS_VSCROLL))
+	_GUICtrlEdit_SetLimitText($myctredit, 128000)
 
-GUISetState(@SW_SHOW)
-
-While 1
-	$nMsg = GUIGetMsg()
-	Sleep(100)
-	_TranslateSeparator()
+	_InjectTimeZoneInfo()
+	_InjectTimestampFormat()
+	_InjectTimestampPrecision()
 	$PrecisionSeparator = GUICtrlRead($PrecisionSeparatorInput)
 	$PrecisionSeparator2 = GUICtrlRead($PrecisionSeparatorInput2)
 	_TranslateTimestamp()
-	Select
-		Case $nMsg = $ButtonOutput
-			$newoutputpath = FileSelectFolder("Select output folder.", "",7,$ParserOutDir)
-			If Not @error then
-				_DisplayInfo("New output folder: " & $newoutputpath & @CRLF)
-				$ParserOutDir = $newoutputpath
-			EndIf
-		Case $nMsg = $ButtonInput
-			$File = FileOpenDialog("Select $UsnJrnl file",@ScriptDir,"All (*.*)")
-			If Not @error Then _DisplayInfo("Input: " & $File & @CRLF)
-		Case $nMsg = $ButtonStart
-			_Main()
-		Case $nMsg = $GUI_EVENT_CLOSE
-			Exit
-	EndSelect
-WEnd
+
+	GUISetState(@SW_SHOW)
+
+	While 1
+		$nMsg = GUIGetMsg()
+		Sleep(100)
+		_TranslateSeparator()
+		$PrecisionSeparator = GUICtrlRead($PrecisionSeparatorInput)
+		$PrecisionSeparator2 = GUICtrlRead($PrecisionSeparatorInput2)
+		_TranslateTimestamp()
+		Select
+			Case $nMsg = $ButtonOutput
+				$newoutputpath = FileSelectFolder("Select output folder.", "",7,$ParserOutDir)
+				If Not @error then
+					_DisplayInfo("New output folder: " & $newoutputpath & @CRLF)
+					$ParserOutDir = $newoutputpath
+				EndIf
+			Case $nMsg = $ButtonInput
+				$File = FileOpenDialog("Select $UsnJrnl file",@ScriptDir,"All (*.*)")
+				If Not @error Then _DisplayInfo("Input: " & $File & @CRLF)
+			Case $nMsg = $ButtonStart
+				_Main()
+			Case $nMsg = $GUI_EVENT_CLOSE
+				Exit
+		EndSelect
+	WEnd
+EndIf
 
 Func _Main()
 	Global $EntryCounter=0
 	GUICtrlSetData($ProgressUsnJrnl, 0)
 
-	If Int(GUICtrlRead($checkl2t) + GUICtrlRead($checkbodyfile) + GUICtrlRead($checkdefaultall)) <> 9 Then
-		_DisplayInfo("Error: Output format can only be one of the options (not more than 1)." & @CRLF)
-		Return
-	EndIf
-	If GUICtrlRead($checkl2t) = 1 Then
-		$Dol2t = True
-	ElseIf GUICtrlRead($checkbodyfile) = 1 Then
-		$DoBodyfile = True
-	ElseIf GUICtrlRead($checkdefaultall) = 1 Then
-		$DoDefaultAll = True
+	If Not $CommandlineMode Then
+		If Int(GUICtrlRead($checkl2t) + GUICtrlRead($checkbodyfile) + GUICtrlRead($checkdefaultall)) <> 9 Then
+			_DisplayInfo("Error: Output format can only be one of the options (not more than 1)." & @CRLF)
+			Return
+		EndIf
+		If GUICtrlRead($checkl2t) = 1 Then
+			$Dol2t = True
+		ElseIf GUICtrlRead($checkbodyfile) = 1 Then
+			$DoBodyfile = True
+		ElseIf GUICtrlRead($checkdefaultall) = 1 Then
+			$DoDefaultAll = True
+		EndIf
 	EndIf
 
-	$USN_Page_Size = GUICtrlRead($UsnPageSizeInput)
+	If Not $CommandlineMode Then
+		$USN_Page_Size = GUICtrlRead($UsnPageSizeInput)
+	EndIf
 	If Mod($USN_Page_Size,512) Then
-		_DisplayInfo("Error: USN_PAGE_SIZE must be a multiple of 512" & @CRLF)
-		Return
+		If Not $CommandlineMode Then
+			_DisplayInfo("Error: USN_PAGE_SIZE must be a multiple of 512" & @CRLF)
+			_DumpOutput("Error: USN_PAGE_SIZE must be a multiple of 512" & @CRLF)
+			Return
+		Else
+			_DumpOutput("Error: USN_PAGE_SIZE must be a multiple of 512" & @CRLF)
+			Exit
+		EndIf
 	EndIf
 
-	$tDelta = _GetUTCRegion()-$tDelta
-	If @error Then
-		_DisplayInfo("Error: Timezone configuration failed." & @CRLF)
-		Return
+	If Not $CommandlineMode Then
+		$tDelta = _GetUTCRegion(GUICtrlRead($Combo2))-$tDelta
+		If @error Then
+			_DisplayInfo("Error: Timezone configuration failed." & @CRLF)
+			Return
+		EndIf
+		$tDelta = $tDelta*-1 ;Since delta is substracted from timestamp later on
 	EndIf
-	$tDelta = $tDelta*-1 ;Since delta is substracted from timestamp later on
 
-	If GUICtrlRead($CheckUnicode) = 1 Then
-		$EncodingWhenOpen = 2+32
-		_DisplayInfo("UNICODE configured" & @CRLF)
+	If $CommandlineMode Then
+		$CheckUnicode = $CheckUnicode
+	Else
+		$CheckUnicode = GUICtrlRead($CheckUnicode)
+	EndIf
+	If $CheckUnicode = 1 Then
+		;$EncodingWhenOpen = 2+32 ;ucs2
+		$EncodingWhenOpen = 2+128 ;utf8 w/bom
+		If Not $CommandlineMode Then _DisplayInfo("UNICODE configured" & @CRLF)
+		_DumpOutput("UNICODE configured" & @CRLF)
 	Else
 		$EncodingWhenOpen = 2
-		_DisplayInfo("ANSI configured" & @CRLF)
+		If Not $CommandlineMode Then _DisplayInfo("ANSI configured" & @CRLF)
+		_DumpOutput("ANSI configured" & @CRLF)
 	EndIf
 
-	If StringLen(GUICtrlRead($PrecisionSeparatorInput)) <> 1 Then
-		_DisplayInfo("Error: Precision separator not set properly" & @crlf)
-		Return
+	If $CommandlineMode Then
+		$PrecisionSeparator = $PrecisionSeparator
 	Else
 		$PrecisionSeparator = GUICtrlRead($PrecisionSeparatorInput)
 	EndIf
+	If StringLen($PrecisionSeparator) <> 1 Then
+		If Not $CommandlineMode Then _DisplayInfo("Error: Precision separator not set properly" & @crlf)
+		_DumpOutput("Error: Precision separator not set properly" & @crlf)
+		Return
+	EndIf
 
-	If GUICtrlRead($checkquotes) = 1 Then
+	If $CommandlineMode Then
+		$checkquotes = $checkquotes
+	Else
+		$checkquotes = GUICtrlRead($checkquotes)
+	EndIf
+
+	If $checkquotes = 1 Then
 		$WithQuotes=True
 	Else
 		$WithQuotes=False
 	EndIf
 
 	If Not FileExists($File) Then
-		_DisplayInfo("Error: No $UsnJrnl chosen for input" & @CRLF)
+		If Not $CommandlineMode Then _DisplayInfo("Error: No $UsnJrnl chosen for input" & @CRLF)
+		_DumpOutput("Error: No $UsnJrnl chosen for input" & @CRLF)
 		Return
 	EndIf
 
@@ -170,40 +214,37 @@ Func _Main()
 	$UsnJrnlCsvFile = $ParserOutDir & "\UsnJrnl_"&$TimestampStart&".csv"
 	$UsnJrnlCsv = FileOpen($UsnJrnlCsvFile, $EncodingWhenOpen)
 	If @error Then
-		_DisplayInfo("Error creating: " & $UsnJrnlCsvFile & @CRLF)
+		If Not $CommandlineMode Then _DisplayInfo("Error creating: " & $UsnJrnlCsvFile & @CRLF)
+		_DumpOutput("Error creating: " & $UsnJrnlCsvFile & @CRLF)
 		Return
 	EndIf
 
 	$DebugOutFile = FileOpen($ParserOutDir & "\UsnJrnl_"&$TimestampStart&".log", $EncodingWhenOpen)
 	If @error Then
+		ConsoleWrite("Error: Could not create log file" & @CRLF)
 		MsgBox(0,"Error","Could not create log file")
 		Exit
 	EndIf
 
 	_DumpOutput("Using $UsnJrnl: " & $File & @CRLF)
-
-	If GUICtrlRead($CheckUnicode) = 1 Then
-		_DumpOutput("Unicode: 1" & @CRLF)
-	Else
-		_DumpOutput("Unicode: 0" & @CRLF)
-	EndIf
-
 	_DumpOutput("Quotes configuration: " & $WithQuotes & @CRLF)
 	_DumpOutput("USN_PAGE_SIZE: " & $USN_Page_Size & @CRLF)
 
-	If GUICtrlRead($CheckScanMode1) = 1 And GUICtrlRead($CheckScanMode2) = 1 Then
-		_DisplayInfo("Error: only 1 scan mode possible" & @CRLF)
-		Return
-	EndIf
+	If Not $CommandlineMode Then
+		If GUICtrlRead($CheckScanMode1) = 1 And GUICtrlRead($CheckScanMode2) = 1 Then
+			_DisplayInfo("Error: only 1 scan mode possible" & @CRLF)
+			Return
+		EndIf
 
-	If GUICtrlRead($CheckScanMode1) = 1 Then
-		$DoScanMode1 = 1
-		$DoNormalMode = 0
-	EndIf
+		If GUICtrlRead($CheckScanMode1) = 1 Then
+			$DoScanMode1 = 1
+			$DoNormalMode = 0
+		EndIf
 
-	If GUICtrlRead($CheckScanMode2) = 1 Then
-		$DoScanMode2 = 1
-		$DoNormalMode = 0
+		If GUICtrlRead($CheckScanMode2) = 1 Then
+			$DoScanMode2 = 1
+			$DoNormalMode = 0
+		EndIf
 	EndIf
 
 	If $DoScanMode1=0 And $DoScanMode2=0 Then
@@ -218,7 +259,23 @@ Func _Main()
 	_DumpOutput("Using timestamp precision: " & $TimestampPrecision & @CRLF)
 	_DumpOutput("Timestamps presented in UTC: " & $UTCconfig & @CRLF)
 	_DumpOutput("Using precision separator: " & $PrecisionSeparator & @CRLF)
-	_DumpOutput("------------------- END CONFIGURATION -----------------------" & @CRLF)
+;	_DumpOutput("------------------- END CONFIGURATION -----------------------" & @CRLF)
+
+	$UsnJrnlSqlFile = $ParserOutDir & "\UsnJrnl_"&$TimestampStart&".sql"
+	FileInstall("C:\tmp\NTFS\UsnJrnl2Csv_v1.0.0.8\import-csv-usnjrnl.sql", $UsnJrnlSqlFile)
+	$FixedPath = StringReplace($UsnJrnlCsvFile,"\","\\")
+	Sleep(500)
+#cs
+	$hUsnJrnlSqlFile = FileOpen($UsnJrnlSqlFile,1)
+	$UsnJrnlSqlFileContent = FileRead($hUsnJrnlSqlFile,FileGetSize($hUsnJrnlSqlFile))
+	$UsnJrnlSqlFileContent = StringReplace($UsnJrnlSqlFileContent,"__PathToCsv__",$FixedPath)
+	FileSetPos($hUsnJrnlSqlFile, 0, $FILE_BEGIN)
+	FileWrite($hUsnJrnlSqlFile,$UsnJrnlSqlFileContent)
+	ConsoleWrite("FileWrite error: " & @error & @CRLF)
+	FileClose($hUsnJrnlSqlFile)
+#ce
+	_ReplaceStringInFile($UsnJrnlSqlFile,"__PathToCsv__",$FixedPath)
+	If $CheckUnicode = 1 Then _ReplaceStringInFile($UsnJrnlSqlFile,"latin1", "utf8")
 
 	$Progress = GUICtrlCreateLabel("Decoding $UsnJrnl info and writing to csv", 10, 280,540,20)
 	GUICtrlSetFont($Progress, 12)
@@ -229,7 +286,8 @@ Func _Main()
 
 	$hFile = _WinAPI_CreateFile("\\.\" & $File,2,2,7)
 	If $hFile = 0 Then
-		_DisplayInfo("Error: Creating handle on file" & @CRLF)
+		If Not $CommandlineMode Then _DisplayInfo("Error: Creating handle on file" & @CRLF)
+		_DumpOutput("Error: Creating handle on file" & @CRLF)
 		Return
 	EndIf
 
@@ -252,6 +310,9 @@ Func _Main()
 				_WinAPI_ReadFile($hFile, DllStructGetPtr($tBuffer), $USN_Page_Size, $nBytes)
 				$RawPage = DllStructGetData($tBuffer, 1)
 				$EntryCounter += _UsnProcessPage(StringMid($RawPage,3),$i*$USN_Page_Size,0)
+				If Not Mod($i,200) Then
+					FileFlush($UsnJrnlCsv)
+				EndIf
 			Next
 
 		Case $DoScanMode1
@@ -267,6 +328,9 @@ Func _Main()
 				If Not @error Then
 					$EntryCounter += _UsnProcessPage(StringMid($RawPage,3+$TestOffset),$i*$USN_Page_Size,$TestOffset)
 				EndIf
+				If Not Mod($i,200) Then
+					FileFlush($UsnJrnlCsv)
+				EndIf
 			Next
 
 		Case $DoScanMode2
@@ -279,6 +343,9 @@ Func _Main()
 				_WinAPI_ReadFile($hFile, DllStructGetPtr($tBuffer), $SectorSize, $nBytes)
 				$RawPage = DllStructGetData($tBuffer, 1)
 				$EntryCounter += _ScanModeUsnProcessPage2(StringMid($RawPage,3),$i*$SectorSize,0)
+				If Not Mod($i,200) Then
+					FileFlush($UsnJrnlCsv)
+				EndIf
 			Next
 
 	EndSelect
@@ -288,9 +355,10 @@ Func _Main()
 	_UsnJrnlProgress()
 	ProgressOff()
 
-	_DisplayInfo("Entries parsed: " & $EntryCounter & @CRLF)
+	If Not $CommandlineMode Then _DisplayInfo("Entries parsed: " & $EntryCounter & @CRLF)
+	_DumpOutput("Pages processed: " & $MaxPages & @CRLF)
 	_DumpOutput("Entries parsed: " & $EntryCounter & @CRLF)
-	_DisplayInfo("Parsing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
+	If Not $CommandlineMode Then _DisplayInfo("Parsing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
 	_DumpOutput("Parsing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
 	_WinAPI_CloseHandle($hFile)
 	FileFlush($UsnJrnlCsv)
@@ -725,11 +793,27 @@ $Regions = "UTC: -12.00|" & _
 	"UTC: 14.00|"
 GUICtrlSetData($Combo2,$Regions,"UTC: 0.00")
 EndFunc
-
+#cs
 Func _GetUTCRegion()
 	$UTCRegion = GUICtrlRead($Combo2)
 	If $UTCRegion = "" Then Return SetError(1,0,0)
 	$part1 = StringMid($UTCRegion,StringInStr($UTCRegion," ")+1)
+	Global $UTCconfig = $part1
+	If StringRight($part1,2) = "15" Then $part1 = StringReplace($part1,".15",".25")
+	If StringRight($part1,2) = "30" Then $part1 = StringReplace($part1,".30",".50")
+	If StringRight($part1,2) = "45" Then $part1 = StringReplace($part1,".45",".75")
+	$DeltaTest = $part1*36000000000
+	Return $DeltaTest
+EndFunc
+#ce
+Func _GetUTCRegion($UTCRegion)
+	If $UTCRegion = "" Then Return SetError(1,0,0)
+
+	If StringInStr($UTCRegion,"UTC:") Then
+		$part1 = StringMid($UTCRegion,StringInStr($UTCRegion," ")+1)
+	Else
+		$part1 = $UTCRegion
+	EndIf
 	Global $UTCconfig = $part1
 	If StringRight($part1,2) = "15" Then $part1 = StringReplace($part1,".15",".25")
 	If StringRight($part1,2) = "30" Then $part1 = StringReplace($part1,".30",".50")
@@ -920,4 +1004,153 @@ Func _ScanModeUsnDecodeRecord($Record)
 	_DumpOutput("$UsnJrnlFileName: " & $UsnJrnlFileName & @CRLF)
 #ce
 	Return 1
+EndFunc
+
+Func _GetInputParams()
+	Local $TimeZone, $OutputFormat, $ScanMode
+	For $i = 1 To $cmdline[0]
+		;ConsoleWrite("Param " & $i & ": " & $cmdline[$i] & @CRLF)
+		If StringLeft($cmdline[$i],13) = "/UsnJrnlFile:" Then $File = StringMid($cmdline[$i],14)
+		If StringLeft($cmdline[$i],12) = "/OutputPath:" Then $ParserOutDir = StringMid($cmdline[$i],13)
+		If StringLeft($cmdline[$i],10) = "/TimeZone:" Then $TimeZone = StringMid($cmdline[$i],11)
+		If StringLeft($cmdline[$i],14) = "/OutputFormat:" Then $OutputFormat = StringMid($cmdline[$i],15)
+		If StringLeft($cmdline[$i],11) = "/Separator:" Then $SeparatorInput = StringMid($cmdline[$i],12)
+		If StringLeft($cmdline[$i],15) = "/QuotationMark:" Then $checkquotes = StringMid($cmdline[$i],16)
+		If StringLeft($cmdline[$i],9) = "/Unicode:" Then $CheckUnicode = StringMid($cmdline[$i],10)
+		If StringLeft($cmdline[$i],10) = "/ScanMode:" Then $ScanMode = StringMid($cmdline[$i],11)
+		If StringLeft($cmdline[$i],10) = "/TSFormat:" Then $DateTimeFormat = StringMid($cmdline[$i],11)
+		If StringLeft($cmdline[$i],13) = "/TSPrecision:" Then $TimestampPrecision = StringMid($cmdline[$i],14)
+		If StringLeft($cmdline[$i],22) = "/TSPrecisionSeparator:" Then $PrecisionSeparator = StringMid($cmdline[$i],23)
+		If StringLeft($cmdline[$i],23) = "/TSPrecisionSeparator2:" Then $PrecisionSeparator2 = StringMid($cmdline[$i],24)
+		If StringLeft($cmdline[$i],12) = "/TSErrorVal:" Then $TimestampErrorVal = StringMid($cmdline[$i],13)
+		If StringLeft($cmdline[$i],13) = "/UsnPageSize:" Then $USN_Page_Size = StringMid($cmdline[$i],14)
+	Next
+
+	If StringLen($ScanMode) > 0 Then
+		If $ScanMode <> 0 And $ScanMode <> 1 And $ScanMode <> 2 Then
+			ConsoleWrite("Error: Incorect ScanMode: " & $ScanMode & @CRLF)
+			Exit
+		EndIf
+	Else
+		$ScanMode = 0
+	EndIf
+	Select
+		case $ScanMode = 0
+			$DoNormalMode = 1
+			$DoScanMode1 = 0
+			$DoScanMode2 = 0
+		case $ScanMode = 1
+			$DoNormalMode = 0
+			$DoScanMode1 = 1
+			$DoScanMode2 = 0
+		case $ScanMode = 2
+			$DoNormalMode = 0
+			$DoScanMode1 = 0
+			$DoScanMode2 = 1
+	EndSelect
+
+	If StringLen($TimeZone) > 0 Then
+		Select
+			Case $TimeZone = "-12.00"
+			Case $TimeZone = "-11.00"
+			Case $TimeZone = "-10.00"
+			Case $TimeZone = "-9.30"
+			Case $TimeZone = "-9.00"
+			Case $TimeZone = "-8.00"
+			Case $TimeZone = "-7.00"
+			Case $TimeZone = "-6.00"
+			Case $TimeZone = "-5.00"
+			Case $TimeZone = "-4.30"
+			Case $TimeZone = "-4.00"
+			Case $TimeZone = "-3.30"
+			Case $TimeZone = "-3.00"
+			Case $TimeZone = "-2.00"
+			Case $TimeZone = "-1.00"
+			Case $TimeZone = "0.00"
+			Case $TimeZone = "1.00"
+			Case $TimeZone = "2.00"
+			Case $TimeZone = "3.00"
+			Case $TimeZone = "3.30"
+			Case $TimeZone = "4.00"
+			Case $TimeZone = "4.30"
+			Case $TimeZone = "5.00"
+			Case $TimeZone = "5.30"
+			Case $TimeZone = "5.45"
+			Case $TimeZone = "6.00"
+			Case $TimeZone = "6.30"
+			Case $TimeZone = "7.00"
+			Case $TimeZone = "8.00"
+			Case $TimeZone = "8.45"
+			Case $TimeZone = "9.00"
+			Case $TimeZone = "9.30"
+			Case $TimeZone = "10.00"
+			Case $TimeZone = "10.30"
+			Case $TimeZone = "11.00"
+			Case $TimeZone = "11.30"
+			Case $TimeZone = "12.00"
+			Case $TimeZone = "12.45"
+			Case $TimeZone = "13.00"
+			Case $TimeZone = "14.00"
+			Case Else
+				$TimeZone = "0.00"
+		EndSelect
+	Else
+		$TimeZone = "0.00"
+	EndIf
+
+	$tDelta = _GetUTCRegion($TimeZone)-$tDelta
+	If @error Then
+		_DisplayInfo("Error: Timezone configuration failed." & @CRLF)
+	Else
+		_DisplayInfo("Timestamps presented in UTC: " & $UTCconfig & @CRLF)
+	EndIf
+	$tDelta = $tDelta*-1
+
+	If StringLen($File) > 0 Then
+		If Not FileExists($File) Then
+			ConsoleWrite("Error input $UsnJrnl file does not exist." & @CRLF)
+			Exit
+		EndIf
+	EndIf
+#cs
+	If StringLen($OutputFormat) > 0 Then
+		If $OutputFormat = "l2t" Then $checkl2t = 1
+		If $OutputFormat = "bodyfile" Then $checkbodyfile = 1
+		If $OutputFormat = "all" Then $checkdefaultall = 1
+		If $checkl2t + $checkbodyfile = 0 Then $checkdefaultall = 1
+	Else
+		$checkdefaultall = 1
+	EndIf
+#ce
+	$checkdefaultall = 1
+	$DoDefaultAll = 1
+	$dol2t = 0
+	$DoBodyfile = 0
+
+	If StringLen($PrecisionSeparator) <> 1 Then $PrecisionSeparator = "."
+	If StringLen($SeparatorInput) <> 1 Then $SeparatorInput = "|"
+
+	If StringLen($TimestampPrecision) > 0 Then
+		Select
+			Case $TimestampPrecision = "None"
+				ConsoleWrite("Timestamp Precision: " & $TimestampPrecision & @CRLF)
+				$TimestampPrecision = 1
+			Case $TimestampPrecision = "MilliSec"
+				ConsoleWrite("Timestamp Precision: " & $TimestampPrecision & @CRLF)
+				$TimestampPrecision = 2
+			Case $TimestampPrecision = "NanoSec"
+				ConsoleWrite("Timestamp Precision: " & $TimestampPrecision & @CRLF)
+				$TimestampPrecision = 3
+		EndSelect
+	Else
+		$TimestampPrecision = 1
+	EndIf
+
+	If StringLen($DateTimeFormat) > 0 Then
+		If $DateTimeFormat <> 1 And $DateTimeFormat <> 2 And $DateTimeFormat <> 3 And $DateTimeFormat <> 4 And $DateTimeFormat <> 5 And $DateTimeFormat <> 6 Then
+			$DateTimeFormat = 6
+		EndIf
+	Else
+		$DateTimeFormat = 6
+	EndIf
 EndFunc

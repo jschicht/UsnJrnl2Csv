@@ -1,5 +1,10 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.8
+Added command line mode. All configurable option from gui are also exposed on command line.
+Changed file encoding to utf8 with BOM, when unicode configured. The previous ucs2 would not import into MySql.
+Added auto generated sql file with correct settings for import of csv.
+
 1.0.0.7
 Added option to specify a second precision separator, to be used as separation between MilliSec and NanoSec.
 Added option to specify a custom error value for invalid timestamps, or incorrectly decoded timestamps.
