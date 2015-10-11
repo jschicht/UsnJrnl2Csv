@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.8
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.9
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Include <WinAPIEx.au3>
@@ -25,7 +25,7 @@ Global $USN_Page_Size = 4096, $Remainder="", $nBytes
 Global $ParserOutDir = @ScriptDir
 Global $myctredit, $CheckUnicode, $checkl2t, $checkbodyfile, $checkdefaultall, $SeparatorInput, $checkquotes
 
-$Progversion = "UsnJrnl2Csv 1.0.0.8"
+$Progversion = "UsnJrnl2Csv 1.0.0.9"
 If $cmdline[0] > 0 Then
 	$CommandlineMode = 1
 	ConsoleWrite($Progversion & @CRLF)
@@ -142,6 +142,12 @@ Func _Main()
 	EndIf
 
 	If Not $CommandlineMode Then
+		$TimestampErrorVal = GUICtrlRead($TimestampErrorInput)
+	Else
+		$TimestampErrorVal = $TimestampErrorVal
+	EndIf
+
+	If Not $CommandlineMode Then
 		$USN_Page_Size = GUICtrlRead($UsnPageSizeInput)
 	EndIf
 	If Mod($USN_Page_Size,512) Then
@@ -182,8 +188,10 @@ Func _Main()
 
 	If $CommandlineMode Then
 		$PrecisionSeparator = $PrecisionSeparator
+		$PrecisionSeparator2 = $PrecisionSeparator2
 	Else
 		$PrecisionSeparator = GUICtrlRead($PrecisionSeparatorInput)
+		$PrecisionSeparator2 = GUICtrlRead($PrecisionSeparatorInput2)
 	EndIf
 	If StringLen($PrecisionSeparator) <> 1 Then
 		If Not $CommandlineMode Then _DisplayInfo("Error: Precision separator not set properly" & @crlf)
@@ -265,15 +273,6 @@ Func _Main()
 	FileInstall("C:\temp\import-csv-usnjrnl.sql", $UsnJrnlSqlFile)
 	$FixedPath = StringReplace($UsnJrnlCsvFile,"\","\\")
 	Sleep(500)
-#cs
-	$hUsnJrnlSqlFile = FileOpen($UsnJrnlSqlFile,1)
-	$UsnJrnlSqlFileContent = FileRead($hUsnJrnlSqlFile,FileGetSize($hUsnJrnlSqlFile))
-	$UsnJrnlSqlFileContent = StringReplace($UsnJrnlSqlFileContent,"__PathToCsv__",$FixedPath)
-	FileSetPos($hUsnJrnlSqlFile, 0, $FILE_BEGIN)
-	FileWrite($hUsnJrnlSqlFile,$UsnJrnlSqlFileContent)
-	ConsoleWrite("FileWrite error: " & @error & @CRLF)
-	FileClose($hUsnJrnlSqlFile)
-#ce
 	_ReplaceStringInFile($UsnJrnlSqlFile,"__PathToCsv__",$FixedPath)
 	If $CheckUnicode = 1 Then _ReplaceStringInFile($UsnJrnlSqlFile,"latin1", "utf8")
 

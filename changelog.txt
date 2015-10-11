@@ -1,5 +1,8 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.9
+Fixed minor bug that caused timestamp precision 2 and timestamp error val not to be re-read at each call to _Main.
+
 1.0.0.8
 Added command line mode. All configurable option from gui are also exposed on command line.
 Changed file encoding to utf8 with BOM, when unicode configured. The previous ucs2 would not import into MySql.
