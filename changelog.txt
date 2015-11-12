@@ -1,5 +1,9 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.11
+Added 2 more options for extended checks on filename and timestamp. Used with scan mode.
+Fixed a bug where some configurations was not re-applied when program was run multiple times with different settings.
+
 1.0.0.10
 Suppressed background console when launching gui.
 Compiled binaries with latest version 3.3.14.2.

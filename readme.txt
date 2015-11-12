@@ -63,7 +63,10 @@ A custom error value to put with errors in timestamp decode. Default value is '0
 The size of USN_PAGE_SIZE. Default is 4096, which should work in most cases.
 /ScanMode:
 Which ScanMode to enter. Default is 0, Normal mode. See explanation further up.
-
+/TestFilename:
+Boolean value to activate extended filename validation. Only used with scan mode 1 or 2. Default value is 1. Will only partly work when used with unicode activated.
+/TestTimestamp:
+Boolean value to activate extended timestamp validation. Only used with scan mode 1 or 2. Default value is 1.
 
 The available TimeZone's to use are:
 -12.00
