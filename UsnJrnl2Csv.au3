@@ -4,7 +4,7 @@
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.11
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.12
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Include <WinAPIEx.au3>
@@ -26,7 +26,7 @@ Global $USN_Page_Size = 4096, $Remainder="", $nBytes
 Global $ParserOutDir = @ScriptDir
 Global $myctredit, $CheckUnicode, $checkl2t, $checkbodyfile, $checkdefaultall, $SeparatorInput, $checkquotes, $CheckExtendedNameCheck, $CheckExtendedTimestampCheck
 
-$Progversion = "UsnJrnl2Csv 1.0.0.11"
+$Progversion = "UsnJrnl2Csv 1.0.0.12"
 If $cmdline[0] > 0 Then
 	$CommandlineMode = 1
 	ConsoleWrite($Progversion & @CRLF)
@@ -399,9 +399,9 @@ Func _Main()
 EndFunc
 
 Func _UsnDecodeRecord($Record, $OffsetRecord)
-	Local $DecodeOk=False
-;	$UsnJrnlRecordLength = StringMid($Record,1,8)
-;	$UsnJrnlRecordLength = Dec(_SwapEndian($UsnJrnlRecordLength),2)
+	Local $DecodeOk=0, $TimestampOk=1
+	$UsnJrnlRecordLength = StringMid($Record,1,8)
+	$UsnJrnlRecordLength = Dec(_SwapEndian($UsnJrnlRecordLength),2)
 	$UsnJrnlMajorVersion = StringMid($Record,9,4)
 	$UsnJrnlMajorVersion = Dec(_SwapEndian($UsnJrnlMajorVersion),2)
 	$UsnJrnlMinorVersion = StringMid($Record,13,4)
@@ -417,6 +417,14 @@ Func _UsnDecodeRecord($Record, $OffsetRecord)
 	$UsnJrnlUsn = StringMid($Record,49,16)
 	$UsnJrnlUsn = Dec(_SwapEndian($UsnJrnlUsn),2)
 	$UsnJrnlTimestamp = StringMid($Record,65,16)
+	If $ExtendedTimestampCheck Then
+		$UsnJrnlTimestampTmp = Dec(_SwapEndian($UsnJrnlTimestamp),2)
+		If $UsnJrnlTimestampTmp < 112589990684262400 Or $UsnJrnlTimestampTmp > 139611588448485376 Then ;14 oktober 1957 - 31 mai 2043
+			$TimestampOk=0
+		Else
+			$TimestampOk=1
+		EndIf
+	EndIf
 	$UsnJrnlTimestamp = _DecodeTimestamp($UsnJrnlTimestamp)
 	$UsnJrnlReason = StringMid($Record,81,8)
 	$UsnJrnlReason = _DecodeReasonCodes("0x"&_SwapEndian($UsnJrnlReason))
@@ -450,8 +458,8 @@ Func _UsnDecodeRecord($Record, $OffsetRecord)
 		_DumpOutput("$UsnJrnlFileName: " & $UsnJrnlFileName & @CRLF)
 	EndIf
 	#ce
-	If Int($UsnJrnlFileReferenceNumber) > 0 And Int($UsnJrnlMFTReferenceSeqNo) > 0 And Int($UsnJrnlParentFileReferenceNumber) > 4 And $UsnJrnlFileNameLength > 0  And $UsnJrnlTimestamp<>"-" Then
-		$DecodeOk=True
+	If $USN_Page_Size > $UsnJrnlRecordLength And Int($UsnJrnlFileReferenceNumber) > 0 And Int($UsnJrnlMFTReferenceSeqNo) > 0 And Int($UsnJrnlParentFileReferenceNumber) > 4 And $UsnJrnlFileNameLength > 0  And $TimestampOk And $UsnJrnlTimestamp <> $TimestampErrorVal Then
+		$DecodeOk=1
 		If $WithQuotes Then
 			FileWriteLine($UsnJrnlCsv, '"'&$OffsetRecord&'"'&$de&'"'&$UsnJrnlFileName&'"'&$de&'"'&$UsnJrnlUsn&'"'&$de&'"'&$UsnJrnlTimestamp&'"'&$de&'"'&$UsnJrnlReason&'"'&$de&'"'&$UsnJrnlFileReferenceNumber&'"'&$de&'"'&$UsnJrnlMFTReferenceSeqNo&'"'&$de&'"'&$UsnJrnlParentFileReferenceNumber&'"'&$de&'"'&$UsnJrnlParentReferenceSeqNo&'"'&$de&'"'&$UsnJrnlFileAttributes&'"'&$de&'"'&$UsnJrnlMajorVersion&'"'&$de&'"'&$UsnJrnlMinorVersion&'"'&$de&'"'&$UsnJrnlSourceInfo&'"'&$de&'"'&$UsnJrnlSecurityId&'"'&@CRLF)
 		Else
@@ -459,7 +467,7 @@ Func _UsnDecodeRecord($Record, $OffsetRecord)
 		EndIf
 	Else
 		_DumpOutput("Error: Bad entry at offset " & $OffsetRecord & ":" & @CRLF)
-		_DumpOutput(_HexEncode("0x"&$Record) & @CRLF)
+;		_DumpOutput(_HexEncode("0x"&$Record) & @CRLF)
 	EndIf
 	Return $DecodeOk
 EndFunc
@@ -921,8 +929,8 @@ Func _UsnProcessPage($TargetPage,$OffsetFile,$OffsetChunk)
 		EndIf
 		$SizeOfNextUsnRecord = $SizeOfNextUsnRecord*2
 		$NextUsnRecord = StringMid($TargetPage,$NextOffset,$SizeOfNextUsnRecord)
-		$FileNameLength = StringMid($TargetPage,$NextOffset+112,4)
-		$FileNameLength = Dec(_SwapEndian($FileNameLength),2)
+;		$FileNameLength = StringMid($TargetPage,$NextOffset+112,4)
+;		$FileNameLength = Dec(_SwapEndian($FileNameLength),2)
 		$OffsetRecord = "0x" & Hex(Int($OffsetFile + ($OffsetChunk + $NextOffset)/2))
 		$LocalUsnCounter += _UsnDecodeRecord($NextUsnRecord, $OffsetRecord)
 		$NextOffset+=$SizeOfNextUsnRecord
@@ -1002,7 +1010,6 @@ Func _ScanModeUsnDecodeRecord($Record)
 	$UsnJrnlTimestamp = StringMid($Record,65,16)
 	If $ExtendedTimestampCheck Then
 		$UsnJrnlTimestampTmp = Dec(_SwapEndian($UsnJrnlTimestamp),2)
-;		If $UsnJrnlTimestampTmp < 0x0190000000000000 Or $UsnJrnlTimestampTmp > 0x01F0000000000000 Then Return SetError(1,0,0) ;14 oktober 1957 - 31 mai 2043
 		If $UsnJrnlTimestampTmp < 112589990684262400 Or $UsnJrnlTimestampTmp > 139611588448485376 Then Return SetError(1,0,0) ;14 oktober 1957 - 31 mai 2043
 	EndIf
 	$UsnJrnlTimestamp = _DecodeTimestamp($UsnJrnlTimestamp)
