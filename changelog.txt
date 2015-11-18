@@ -1,5 +1,10 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.13
+Added more validation check.
+Added support for identifying records spanning across sectors while in scan mode 2.
+Deactivated scan mode 1 as it no longer makes any sense to use it.
+
 1.0.0.12
 Improved record validation for normal mode.
 

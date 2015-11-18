@@ -18,10 +18,10 @@ Timestamps are written UTC 0.00 by default, but can be configured to anything. T
 
 Scan modes
 There are 2 scan mode options for handling damaged input data, like for instance carved usn records. The default mode is normal mode, which expects a well structured $UsnJrnl file, containing 1 or more usn pages.
-Scan mode 1: Is suited when input has valid usn pages, but has has some damaged data at page start. Is slower parsing than normal mode, but faster than mode 2. 
-Scan mode 2: Is best suited with severely damaged data. The concept of usn pages is thrown, and every sector of data is treated separately. This option will identify any chunk of data as a usn record if it resembles a valid usn record structure. Usn records can be randomly put within any kind of input data, and still be found. Usn records that span sector boundaries within a usn page, may not be identified using this mode. This mode is the slowest.
+Scan mode 1: Deactivated.
+Scan mode 2: Is best suited with severely damaged data. This option is brute-force-like and will identify any chunk of data as a usn record if it resembles a valid usn record structure. Usn records can be randomly put within any kind of input data, and still be found. This mode is very slow.
 
-For both scan modes there may be false positives, but if so they will most likely stand out from the rest.
+There still exist some possibility for false positives even though lots of validation checks are present. 2 optional validations tests can be deactivated to improve output or speed. The extended filename check is very slow, but also greatly reduces false positive. The extended timestamp check can also be optionally disable as it will throw an error on validation for timestamps outside the defined range of 14 oktober 1957 - 31 mai 2043.
 
 Requirements
 The journal must have been extracted beforehand by another tool.

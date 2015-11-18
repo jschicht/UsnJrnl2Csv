@@ -4,7 +4,7 @@
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.12
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.13
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Include <WinAPIEx.au3>
@@ -26,7 +26,7 @@ Global $USN_Page_Size = 4096, $Remainder="", $nBytes
 Global $ParserOutDir = @ScriptDir
 Global $myctredit, $CheckUnicode, $checkl2t, $checkbodyfile, $checkdefaultall, $SeparatorInput, $checkquotes, $CheckExtendedNameCheck, $CheckExtendedTimestampCheck
 
-$Progversion = "UsnJrnl2Csv 1.0.0.12"
+$Progversion = "UsnJrnl2Csv 1.0.0.13"
 If $cmdline[0] > 0 Then
 	$CommandlineMode = 1
 	ConsoleWrite($Progversion & @CRLF)
@@ -75,7 +75,7 @@ Else
 
 	$LabelBrokenData = GUICtrlCreateLabel("Broken data:",130,100,65,20)
 	$CheckScanMode1 = GUICtrlCreateCheckbox("Scan mode 1", 200, 100, 80, 20)
-	GUICtrlSetState($CheckScanMode1, $GUI_UNCHECKED)
+	GUICtrlSetState($CheckScanMode1, $GUI_DISABLE)
 	$CheckScanMode2 = GUICtrlCreateCheckbox("Scan mode 2", 200, 120, 80, 20)
 	GUICtrlSetState($CheckScanMode2, $GUI_UNCHECKED)
 
@@ -231,6 +231,7 @@ Func _Main()
 	Else
 		$ExtendedNameCheck=0
 	EndIf
+	_DumpOutput("Extended filename check: " & $ExtendedNameCheck & @CRLF)
 
 	If $CommandlineMode Then
 		$ExtendedTimestampCheck = $CheckExtendedTimestampCheck
@@ -243,6 +244,7 @@ Func _Main()
 	Else
 		$ExtendedTimestampCheck=0
 	EndIf
+	_DumpOutput("Extended timestamp check: " & $ExtendedTimestampCheck & @CRLF)
 
 	If Not FileExists($File) Then
 		If Not $CommandlineMode Then _DisplayInfo("Error: No $UsnJrnl chosen for input" & @CRLF)
@@ -366,13 +368,13 @@ Func _Main()
 			Next
 
 		Case $DoScanMode2
-			$tBuffer = DllStructCreate("byte[" & $SectorSize & "]")
+			$tBuffer = DllStructCreate("byte[" & $SectorSize*2 & "]")
 			$MaxPages = Ceiling($InputFileSize/$SectorSize)
 			For $i = 0 To $MaxPages-1
 				$CurrentPage=$i
 				_WinAPI_SetFilePointerEx($hFile, $i*$SectorSize, $FILE_BEGIN)
-				If $i = $MaxPages-1 Then $tBuffer = DllStructCreate("byte[" & $SectorSize & "]")
-				_WinAPI_ReadFile($hFile, DllStructGetPtr($tBuffer), $SectorSize, $nBytes)
+				If $i = $MaxPages-1 Then $tBuffer = DllStructCreate("byte[" & $SectorSize*2 & "]")
+				_WinAPI_ReadFile($hFile, DllStructGetPtr($tBuffer), $SectorSize*2, $nBytes)
 				$RawPage = DllStructGetData($tBuffer, 1)
 				$EntryCounter += _ScanModeUsnProcessPage2(StringMid($RawPage,3),$i*$SectorSize,0)
 				If Not Mod($i,1000) Then
@@ -979,14 +981,15 @@ Func _ScanModeUsnProcessPage2($TargetPage,$OffsetFile,$OffsetChunk)
 			$NextOffset+=2
 		EndIf
 
-	Until $NextOffset > $TotalSizeOfPage
+	Until $NextOffset > $TotalSizeOfPage Or $NextOffset/2 > $SectorSize
 	Return $LocalUsnCounter
 EndFunc
 
 Func _ScanModeUsnDecodeRecord($Record)
 	$UsnJrnlRecordLength = StringMid($Record,1,8)
 	$UsnJrnlRecordLength = Dec(_SwapEndian($UsnJrnlRecordLength),2)
-	If $UsnJrnlRecordLength > $USN_Page_Size Then Return SetError(1,0,0)
+;	If $UsnJrnlRecordLength > $USN_Page_Size Or $UsnJrnlRecordLength < BinaryLen("0x"&$Record) Then Return SetError(1,0,0)
+	If (($UsnJrnlRecordLength > $USN_Page_Size) Or ($UsnJrnlRecordLength > StringLen($Record)/2)) Then Return SetError(1,0,0)
 	$UsnJrnlMajorVersion = StringMid($Record,9,4)
 	$UsnJrnlMajorVersion = Dec(_SwapEndian($UsnJrnlMajorVersion),2)
 	If $UsnJrnlMajorVersion < 2 And $UsnJrnlMajorVersion > 4 Then Return SetError(1,0,0)
@@ -1054,6 +1057,13 @@ Func _ScanModeUsnDecodeRecord($Record)
 ;	_DumpOutput("$UsnJrnlSecurityId: " & $UsnJrnlSecurityId & @CRLF)
 ;	_DumpOutput("$UsnJrnlFileAttributes: " & $UsnJrnlFileAttributes & @CRLF)
 	_DumpOutput("$UsnJrnlFileName: " & $UsnJrnlFileName & @CRLF)
+
+	_DumpOutput("$UsnJrnlRecordLength: " & $UsnJrnlRecordLength & @CRLF)
+	_DumpOutput("StringLen($Record)/2): " & StringLen($Record)/2 & @CRLF)
+	_DumpOutput(_HexEncode("0x"&$Record) & @CRLF)
+	If $UsnJrnlUsn = 1605548992 Then
+		MsgBox(0,"Info","Check output")
+	EndIf
 #ce
 	Return 1
 EndFunc
