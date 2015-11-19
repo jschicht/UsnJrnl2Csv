@@ -16,12 +16,11 @@ The USN_PAGE_SIZE is configurable. The default value is 4096, and should be suff
 
 Timestamps are written UTC 0.00 by default, but can be configured to anything. The format and precision of the timestamps can also be configured, as well as the millisec/precision separator. See displayed examples in the gui.
 
-Scan modes
-There are 2 scan mode options for handling damaged input data, like for instance carved usn records. The default mode is normal mode, which expects a well structured $UsnJrnl file, containing 1 or more usn pages.
-Scan mode 1: Deactivated.
-Scan mode 2: Is best suited with severely damaged data. This option is brute-force-like and will identify any chunk of data as a usn record if it resembles a valid usn record structure. Usn records can be randomly put within any kind of input data, and still be found. This mode is very slow.
+Scan mode
+The scan mode option for handling damaged input data, like for instance carved usn records. The default mode is normal mode, which expects a well structured $UsnJrnl file, containing 1 or more usn pages.
+It works fine with any damaged data. This option is brute-force-like and will identify any usn record in a chunk of data if it is valid. Usn records can be randomly put within any kind of input data, and still be found. This mode is very slow.
 
-There still exist some possibility for false positives even though lots of validation checks are present. 2 optional validations tests can be deactivated to improve output or speed. The extended filename check is very slow, but also greatly reduces false positive. The extended timestamp check can also be optionally disable as it will throw an error on validation for timestamps outside the defined range of 14 oktober 1957 - 31 mai 2043.
+There still exist some possibility for false positives even though lots of validation checks are present. 3 optional validations tests can be deactivated to improve output or speed. The 2 extended filename checks are slow, but also greatly reduces false positive. The extended timestamp check can also be optionally disable as it will throw an error on validation for timestamps outside the defined range of 14 oktober 1957 - 31 mai 2043.
 
 Requirements
 The journal must have been extracted beforehand by another tool.
@@ -48,7 +47,7 @@ The separator to use in the csv. Default is |
 /QuotationMark:
 Boolean value for surrounding values in csv with quotes. Default is 0. Can be 0 or 1.
 /Unicode:
-Boolean value for decoding unicode strings. Default is 0. Can be 0 or 1.
+Boolean value for decoding unicode strings. Default is 1. Can be 0 or 1.
 /TSFormat:
 An integer from 1 - 6 for specifying the timestamp format. Start the gui to see what they mean. Default is 6.
 /TSPrecision:
@@ -62,11 +61,13 @@ A custom error value to put with errors in timestamp decode. Default value is '0
 /UsnPageSize:
 The size of USN_PAGE_SIZE. Default is 4096, which should work in most cases.
 /ScanMode:
-Which ScanMode to enter. Default is 0, Normal mode. See explanation further up.
-/TestFilename:
-Boolean value to activate extended filename validation. Only used with scan mode 1 or 2. Default value is 1. Will only partly work when used with unicode activated.
+Boolean value to activate ScanMode. Default is 0, Normal mode. Can be 0 or 1. See explanation further up.
+/TestFilenameChar:
+Boolean value to activate extended filename validation for characters outside valid range. Only used with scan mode. Default value is 1.
+/TestFilenameWindows:
+Boolean value to activate extended filename validation for characters not conforming to Windows valid filenames. Only used with scan mode. Default value is 1.
 /TestTimestamp:
-Boolean value to activate extended timestamp validation. Only used with scan mode 1 or 2. Default value is 1.
+Boolean value to activate extended timestamp validation. Default value is 1. Can be 0 or 1.
 
 The available TimeZone's to use are:
 -12.00

@@ -4,7 +4,7 @@
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.13
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.14
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Include <WinAPIEx.au3>
@@ -18,15 +18,15 @@
 Global $UsnJrnlCsv, $UsnJrnlCsvFile, $UsnJrnlDbfile, $de="|", $PrecisionSeparator=".", $PrecisionSeparator2="", $sOutputFile, $VerboseOn=false, $SurroundingQuotes=True, $PreviousUsn, $DoDefaultAll, $dol2t, $DoBodyfile, $DebugOutFile
 Global $_COMMON_KERNEL32DLL=DllOpen("kernel32.dll"), $outputpath=@ScriptDir, $File, $MaxPages, $CurrentPage, $WithQuotes, $EncodingWhenOpen=2
 Global $ProgressStatus, $ProgressUsnJrnl
-Global $begin, $ElapsedTime, $EntryCounter, $DoScanMode1=0, $DoScanMode2=0, $DoNormalMode=1, $SectorSize=512, $SkipUnicodeNames=1, $ExtendedNameCheck=1, $ExtendedTimestampCheck=1
+Global $begin, $ElapsedTime, $EntryCounter, $DoScanMode1=0, $DoScanMode=0, $DoNormalMode=1, $SectorSize=512, $ExtendedNameCheckChar=1, $ExtendedNameCheckWindows=1, $ExtendedNameCheckAll=1, $ExtendedTimestampCheck=1
 Global $tDelta = _WinTime_GetUTCToLocalFileTimeDelta()
 Global $DateTimeFormat,$ExampleTimestampVal = "01CD74B3150770B8",$TimestampPrecision, $UTCconfig
 Global $TimestampErrorVal = "0000-00-00 00:00:00"
 Global $USN_Page_Size = 4096, $Remainder="", $nBytes
 Global $ParserOutDir = @ScriptDir
-Global $myctredit, $CheckUnicode, $checkl2t, $checkbodyfile, $checkdefaultall, $SeparatorInput, $checkquotes, $CheckExtendedNameCheck, $CheckExtendedTimestampCheck
+Global $myctredit, $CheckUnicode, $checkl2t, $checkbodyfile, $checkdefaultall, $SeparatorInput, $checkquotes, $CheckExtendedNameCheckChar, $CheckExtendedNameCheckWindows, $CheckExtendedTimestampCheck
 
-$Progversion = "UsnJrnl2Csv 1.0.0.13"
+$Progversion = "UsnJrnl2Csv 1.0.0.14"
 If $cmdline[0] > 0 Then
 	$CommandlineMode = 1
 	ConsoleWrite($Progversion & @CRLF)
@@ -36,7 +36,7 @@ Else
 	DllCall("kernel32.dll", "bool", "FreeConsole")
 	$CommandlineMode = 0
 
-	$Form = GUICreate($Progversion, 540, 350, -1, -1)
+	$Form = GUICreate($Progversion, 700, 350, -1, -1)
 
 	$LabelTimestampFormat = GUICtrlCreateLabel("Timestamp format:",20,20,90,20)
 	$ComboTimestampFormat = GUICtrlCreateCombo("", 110, 20, 30, 25)
@@ -58,10 +58,10 @@ Else
 	$SaparatorInput = GUICtrlCreateInput($de,90,70,20,20)
 	$SaparatorInput2 = GUICtrlCreateInput($de,120,70,30,20)
 	GUICtrlSetState($SaparatorInput2, $GUI_DISABLE)
-	$checkquotes = GUICtrlCreateCheckbox("Quotation mark", 160, 70, 90, 20)
+	$checkquotes = GUICtrlCreateCheckbox("Quotation mark", 180, 70, 90, 20)
 	GUICtrlSetState($checkquotes, $GUI_UNCHECKED)
-	$CheckUnicode = GUICtrlCreateCheckbox("Unicode", 255, 70, 60, 20)
-	GUICtrlSetState($CheckUnicode, $GUI_UNCHECKED)
+	$CheckUnicode = GUICtrlCreateCheckbox("Unicode", 180, 90, 60, 20)
+	GUICtrlSetState($CheckUnicode, $GUI_CHECKED)
 
 	$checkl2t = GUICtrlCreateCheckbox("log2timeline", 20, 100, 130, 20)
 	GUICtrlSetState($checkl2t, $GUI_UNCHECKED)
@@ -73,15 +73,16 @@ Else
 	GUICtrlSetState($checkdefaultall, $GUI_CHECKED)
 	GUICtrlSetState($checkdefaultall, $GUI_DISABLE)
 
-	$LabelBrokenData = GUICtrlCreateLabel("Broken data:",130,100,65,20)
-	$CheckScanMode1 = GUICtrlCreateCheckbox("Scan mode 1", 200, 100, 80, 20)
-	GUICtrlSetState($CheckScanMode1, $GUI_DISABLE)
-	$CheckScanMode2 = GUICtrlCreateCheckbox("Scan mode 2", 200, 120, 80, 20)
-	GUICtrlSetState($CheckScanMode2, $GUI_UNCHECKED)
+	$LabelBrokenData = GUICtrlCreateLabel("Broken data:",130,120,65,20)
+	$CheckScanMode = GUICtrlCreateCheckbox("Scan mode", 200, 120, 80, 20)
+	GUICtrlSetState($CheckScanMode, $GUI_UNCHECKED)
 
-	$CheckExtendedNameCheck = GUICtrlCreateCheckbox("Filename check", 290, 100, 120, 20)
-	GUICtrlSetState($CheckExtendedNameCheck, $GUI_CHECKED)
-	$CheckExtendedTimestampCheck = GUICtrlCreateCheckbox("Timestamp check", 290, 120, 120, 20)
+	$LabelBrokenData = GUICtrlCreateLabel("Data validation:",300,75,90,20)
+	$CheckExtendedNameCheckChar = GUICtrlCreateCheckbox("Filename check Char", 390, 70, 120, 20)
+	GUICtrlSetState($CheckExtendedNameCheckChar, $GUI_CHECKED)
+	$CheckExtendedNameCheckWindows = GUICtrlCreateCheckbox("Filename check Windows", 390, 90, 150, 20)
+	GUICtrlSetState($CheckExtendedNameCheckWindows, $GUI_CHECKED)
+	$CheckExtendedTimestampCheck = GUICtrlCreateCheckbox("Timestamp check", 390, 110, 120, 20)
 	GUICtrlSetState($CheckExtendedTimestampCheck, $GUI_CHECKED)
 
 	$LabelUsnPageSize = GUICtrlCreateLabel("USN_PAGE_SIZE:",130,145,100,20)
@@ -90,10 +91,10 @@ Else
 	$LabelTimestampError = GUICtrlCreateLabel("Timestamp ErrorVal:",290,145,100,20)
 	$TimestampErrorInput = GUICtrlCreateInput($TimestampErrorVal,390,145,130,20)
 
-	$ButtonOutput = GUICtrlCreateButton("Change Output", 420, 70, 100, 20)
-	$ButtonInput = GUICtrlCreateButton("Browse $UsnJrnl", 420, 95, 100, 20)
-	$ButtonStart = GUICtrlCreateButton("Start Parsing", 420, 120, 100, 20)
-	$myctredit = GUICtrlCreateEdit("Current output folder: " & $outputpath & @CRLF, 0, 170, 540, 100, BitOR($ES_AUTOVSCROLL,$WS_VSCROLL))
+	$ButtonOutput = GUICtrlCreateButton("Change Output", 580, 70, 100, 20)
+	$ButtonInput = GUICtrlCreateButton("Browse $UsnJrnl", 580, 95, 100, 20)
+	$ButtonStart = GUICtrlCreateButton("Start Parsing", 580, 120, 100, 20)
+	$myctredit = GUICtrlCreateEdit("Current output folder: " & $outputpath & @CRLF, 0, 170, 700, 100, BitOR($ES_AUTOVSCROLL,$WS_VSCROLL))
 	_GUICtrlEdit_SetLimitText($myctredit, 128000)
 
 	_InjectTimeZoneInfo()
@@ -182,17 +183,16 @@ Func _Main()
 	Else
 		$TestUnicode = GUICtrlRead($CheckUnicode)
 	EndIf
+
 	If $TestUnicode = 1 Then
 		;$EncodingWhenOpen = 2+32 ;ucs2
 		$EncodingWhenOpen = 2+128 ;utf8 w/bom
 		If Not $CommandlineMode Then _DisplayInfo("UNICODE configured" & @CRLF)
 		_DumpOutput("UNICODE configured" & @CRLF)
-		$SkipUnicodeNames=0
 	Else
 		$EncodingWhenOpen = 2
 		If Not $CommandlineMode Then _DisplayInfo("ANSI configured" & @CRLF)
 		_DumpOutput("ANSI configured" & @CRLF)
-		$SkipUnicodeNames=1
 	EndIf
 
 	If $CommandlineMode Then
@@ -221,17 +221,36 @@ Func _Main()
 	EndIf
 
 	If $CommandlineMode Then
-		$ExtendedNameCheck = $CheckExtendedNameCheck
+		$ExtendedNameCheckChar = $CheckExtendedNameCheckChar
 	Else
-		$ExtendedNameCheck = GUICtrlRead($CheckExtendedNameCheck)
+		$ExtendedNameCheckChar = GUICtrlRead($CheckExtendedNameCheckChar)
 	EndIf
 
-	If $ExtendedNameCheck = 1 Then
-		$ExtendedNameCheck=1
+	If $ExtendedNameCheckChar = 1 Then
+		$ExtendedNameCheckChar=1
 	Else
-		$ExtendedNameCheck=0
+		$ExtendedNameCheckChar=0
 	EndIf
-	_DumpOutput("Extended filename check: " & $ExtendedNameCheck & @CRLF)
+	_DumpOutput("Extended filename check Char: " & $ExtendedNameCheckChar & @CRLF)
+
+	If $CommandlineMode Then
+		$ExtendedNameCheckWindows = $CheckExtendedNameCheckWindows
+	Else
+		$ExtendedNameCheckWindows = GUICtrlRead($CheckExtendedNameCheckWindows)
+	EndIf
+
+	If $ExtendedNameCheckWindows = 1 Then
+		$ExtendedNameCheckWindows=1
+	Else
+		$ExtendedNameCheckWindows=0
+	EndIf
+	_DumpOutput("Extended filename check Windows: " & $ExtendedNameCheckWindows & @CRLF)
+
+	If $ExtendedNameCheckChar And $ExtendedNameCheckWindows Then
+		$ExtendedNameCheckAll = 1
+	Else
+		$ExtendedNameCheckAll = 0
+	EndIf
 
 	If $CommandlineMode Then
 		$ExtendedTimestampCheck = $CheckExtendedTimestampCheck
@@ -274,29 +293,18 @@ Func _Main()
 	_DumpOutput("USN_PAGE_SIZE: " & $USN_Page_Size & @CRLF)
 
 	If Not $CommandlineMode Then
-		If GUICtrlRead($CheckScanMode1) = 1 And GUICtrlRead($CheckScanMode2) = 1 Then
-			_DisplayInfo("Error: only 1 scan mode possible" & @CRLF)
-			Return
-		EndIf
-
-		If GUICtrlRead($CheckScanMode1) = 1 Then
-			$DoScanMode1 = 1
-			$DoNormalMode = 0
-		EndIf
-
-		If GUICtrlRead($CheckScanMode2) = 1 Then
-			$DoScanMode2 = 1
+		If GUICtrlRead($CheckScanMode) = 1 Then
+			$DoScanMode = 1
 			$DoNormalMode = 0
 		EndIf
 	EndIf
 
-	If $DoScanMode1=0 And $DoScanMode2=0 Then
+	If $DoScanMode=0 Then
 		$DoNormalMode=1
 	EndIf
 
 	_DumpOutput("Normal mode: " & $DoNormalMode & @CRLF)
-	_DumpOutput("Scan mode 1: " & $DoScanMode1 & @CRLF)
-	_DumpOutput("Scan mode 2: " & $DoScanMode2 & @CRLF)
+	_DumpOutput("Scan mode: " & $DoScanMode & @CRLF)
 
 	_DumpOutput("Using DateTime format: " & $DateTimeFormat & @CRLF)
 	_DumpOutput("Using timestamp precision: " & $TimestampPrecision & @CRLF)
@@ -315,7 +323,7 @@ Func _Main()
 	GUICtrlSetFont($Progress, 12)
 	$ProgressStatus = GUICtrlCreateLabel("", 10, 275, 520, 20)
 	$ElapsedTime = GUICtrlCreateLabel("", 10, 290, 520, 20)
-	$ProgressUsnJrnl = GUICtrlCreateProgress(0,  315, 540, 30)
+	$ProgressUsnJrnl = GUICtrlCreateProgress(0,  315, 700, 30)
 	$begin = TimerInit()
 
 	$hFile = _WinAPI_CreateFile("\\.\" & $File,2,2,7)
@@ -349,25 +357,7 @@ Func _Main()
 				EndIf
 			Next
 
-		Case $DoScanMode1
-			$tBuffer = DllStructCreate("byte[" & $USN_Page_Size & "]")
-			$MaxPages = Ceiling($InputFileSize/$USN_Page_Size)
-			For $i = 0 To $MaxPages-1
-				$CurrentPage=$i
-				_WinAPI_SetFilePointerEx($hFile, $i*$USN_Page_Size, $FILE_BEGIN)
-				If $i = $MaxPages-1 Then $tBuffer = DllStructCreate("byte[" & $USN_Page_Size & "]")
-				_WinAPI_ReadFile($hFile, DllStructGetPtr($tBuffer), $USN_Page_Size, $nBytes)
-				$RawPage = DllStructGetData($tBuffer, 1)
-				$TestOffset = _ScanModeUsnProcessPage(StringMid($RawPage,3))
-				If Not @error Then
-					$EntryCounter += _UsnProcessPage(StringMid($RawPage,3+$TestOffset),$i*$USN_Page_Size,$TestOffset)
-				EndIf
-				If Not Mod($i,1000) Then
-					FileFlush($UsnJrnlCsv)
-				EndIf
-			Next
-
-		Case $DoScanMode2
+		Case $DoScanMode
 			$tBuffer = DllStructCreate("byte[" & $SectorSize*2 & "]")
 			$MaxPages = Ceiling($InputFileSize/$SectorSize)
 			For $i = 0 To $MaxPages-1
@@ -835,19 +825,7 @@ $Regions = "UTC: -12.00|" & _
 	"UTC: 14.00|"
 GUICtrlSetData($Combo2,$Regions,"UTC: 0.00")
 EndFunc
-#cs
-Func _GetUTCRegion()
-	$UTCRegion = GUICtrlRead($Combo2)
-	If $UTCRegion = "" Then Return SetError(1,0,0)
-	$part1 = StringMid($UTCRegion,StringInStr($UTCRegion," ")+1)
-	Global $UTCconfig = $part1
-	If StringRight($part1,2) = "15" Then $part1 = StringReplace($part1,".15",".25")
-	If StringRight($part1,2) = "30" Then $part1 = StringReplace($part1,".30",".50")
-	If StringRight($part1,2) = "45" Then $part1 = StringReplace($part1,".45",".75")
-	$DeltaTest = $part1*36000000000
-	Return $DeltaTest
-EndFunc
-#ce
+
 Func _GetUTCRegion($UTCRegion)
 	If $UTCRegion = "" Then Return SetError(1,0,0)
 
@@ -1033,14 +1011,19 @@ Func _ScanModeUsnDecodeRecord($Record)
 	$UsnJrnlFileNameOffset = Dec(_SwapEndian($UsnJrnlFileNameOffset),2)
 	If $UsnJrnlFileNameOffset <> 60 Then Return SetError(1,0,0)
 	$UsnJrnlFileName = StringMid($Record,121,$UsnJrnlFileNameLength*2)
-	If $ExtendedNameCheck Then
-		If $SkipUnicodeNames Then
-			$NameTest = (_ValidateAnsiName($UsnJrnlFileName) And _ValidateWindowsFileName($UsnJrnlFileName))
-		Else
+	$NameTest = 1
+	Select
+		Case $ExtendedNameCheckAll
+			_DumpOutput("$ExtendedNameCheckAll: " & $ExtendedNameCheckAll & @CRLF)
+			$NameTest = _ValidateCharacterAndWindowsFileName($UsnJrnlFileName)
+		Case $ExtendedNameCheckChar
+			_DumpOutput("$ExtendedNameCheckChar: " & $ExtendedNameCheckChar & @CRLF)
+			$NameTest = _ValidateCharacter($UsnJrnlFileName)
+		Case $ExtendedNameCheckWindows
+			_DumpOutput("$ExtendedNameCheckWindows: " & $ExtendedNameCheckWindows & @CRLF)
 			$NameTest = _ValidateWindowsFileName($UsnJrnlFileName)
-		EndIf
-		If Not $NameTest Then Return SetError(1,0,0)
-	EndIf
+	EndSelect
+	If Not $NameTest Then Return SetError(1,0,0)
 	$UsnJrnlFileName = BinaryToString("0x"&$UsnJrnlFileName,2)
 	If @error Or $UsnJrnlFileName = "" Or StringLen($UsnJrnlFileName)>$UsnJrnlRecordLength*2 Or StringLen($UsnJrnlFileName)>255 Then Return SetError(1,0,0)
 #cs
@@ -1086,17 +1069,36 @@ Func _GetInputParams()
 		If StringLeft($cmdline[$i],23) = "/TSPrecisionSeparator2:" Then $PrecisionSeparator2 = StringMid($cmdline[$i],24)
 		If StringLeft($cmdline[$i],12) = "/TSErrorVal:" Then $TimestampErrorVal = StringMid($cmdline[$i],13)
 		If StringLeft($cmdline[$i],13) = "/UsnPageSize:" Then $USN_Page_Size = StringMid($cmdline[$i],14)
-		If StringLeft($cmdline[$i],14) = "/TestFilename:" Then $CheckExtendedNameCheck = StringMid($cmdline[$i],15)
+		If StringLeft($cmdline[$i],18) = "/TestFilenameChar:" Then $CheckExtendedNameCheckChar = StringMid($cmdline[$i],19)
+		If StringLeft($cmdline[$i],21) = "/TestFilenameWindows:" Then $CheckExtendedNameCheckWindows = StringMid($cmdline[$i],22)
 		If StringLeft($cmdline[$i],15) = "/TestTimestamp:" Then $CheckExtendedTimestampCheck = StringMid($cmdline[$i],16)
 	Next
 
-	If StringLen($CheckExtendedNameCheck) > 0 Then
-		If $CheckExtendedNameCheck <> 0 And $CheckExtendedNameCheck <> 1 Then
-			ConsoleWrite("Error: Incorect TestFilename: " & $CheckExtendedNameCheck & @CRLF)
+	If StringLen($CheckUnicode) > 0 Then
+		If $CheckUnicode <> 0 And $CheckUnicode <> 1 Then
+			ConsoleWrite("Error: Incorect Unicode: " & $CheckUnicode & @CRLF)
 			Exit
 		EndIf
 	Else
-		$CheckExtendedNameCheck = 1
+		$CheckUnicode = 1
+	EndIf
+
+	If StringLen($CheckExtendedNameCheckChar) > 0 Then
+		If $CheckExtendedNameCheckChar <> 0 And $CheckExtendedNameCheckChar <> 1 Then
+			ConsoleWrite("Error: Incorect TestFilenameChar: " & $CheckExtendedNameCheckChar & @CRLF)
+			Exit
+		EndIf
+	Else
+		$CheckExtendedNameCheckChar = 1
+	EndIf
+
+	If StringLen($CheckExtendedNameCheckWindows) > 0 Then
+		If $CheckExtendedNameCheckWindows <> 0 And $CheckExtendedNameCheckWindows <> 1 Then
+			ConsoleWrite("Error: Incorect TestFilenameWindows: " & $CheckExtendedNameCheckWindows & @CRLF)
+			Exit
+		EndIf
+	Else
+		$CheckExtendedNameCheckWindows = 1
 	EndIf
 
 	If StringLen($CheckExtendedTimestampCheck) > 0 Then
@@ -1109,9 +1111,8 @@ Func _GetInputParams()
 	EndIf
 
 	If StringLen($ScanMode) > 0 Then
-		If $ScanMode <> 0 And $ScanMode <> 1 And $ScanMode <> 2 Then
-			ConsoleWrite("Error: Incorect ScanMode: " & $ScanMode & @CRLF)
-			Exit
+		If $ScanMode <> 0 Then
+			$ScanMode = 1
 		EndIf
 	Else
 		$ScanMode = 0
@@ -1119,16 +1120,10 @@ Func _GetInputParams()
 	Select
 		case $ScanMode = 0
 			$DoNormalMode = 1
-			$DoScanMode1 = 0
-			$DoScanMode2 = 0
+			$DoScanMode = 0
 		case $ScanMode = 1
 			$DoNormalMode = 0
-			$DoScanMode1 = 1
-			$DoScanMode2 = 0
-		case $ScanMode = 2
-			$DoNormalMode = 0
-			$DoScanMode1 = 0
-			$DoScanMode2 = 1
+			$DoScanMode = 1
 	EndSelect
 
 	If StringLen($TimeZone) > 0 Then
@@ -1237,13 +1232,13 @@ Func _GetInputParams()
 	EndIf
 EndFunc
 
-Func _ValidateAnsiName($InputString)
+Func _ValidateCharacter($InputString)
 ;ConsoleWrite("$InputString: " & $InputString & @CRLF)
 	$StringLength = StringLen($InputString)
 	For $i = 1 To $StringLength Step 4
 		$TestChunk = StringMid($InputString,$i,4)
 		$TestChunk = Dec(_SwapEndian($TestChunk),2)
-		If ($TestChunk >= 32 And $TestChunk < 127) Then
+		If ($TestChunk > 31 And $TestChunk < 256) Then
 			ContinueLoop
 		Else
 			Return 0
@@ -1258,6 +1253,26 @@ Func _ValidateWindowsFileName($InputString)
 		$TestChunk = StringMid($InputString,$i,4)
 		$TestChunk = Dec(_SwapEndian($TestChunk),2)
 		If ($TestChunk <> 47 And $TestChunk <> 92 And $TestChunk <> 58 And $TestChunk <> 42 And $TestChunk <> 63 And $TestChunk <> 34 And $TestChunk <> 60 And $TestChunk <> 62) Then
+			ContinueLoop
+		Else
+			Return 0
+		EndIf
+	Next
+	Return 1
+EndFunc
+
+Func _ValidateCharacterAndWindowsFileName($InputString)
+;ConsoleWrite("$InputString: " & $InputString & @CRLF)
+	$StringLength = StringLen($InputString)
+	For $i = 1 To $StringLength Step 4
+		$TestChunk = StringMid($InputString,$i,4)
+		$TestChunk = Dec(_SwapEndian($TestChunk),2)
+		If ($TestChunk > 31 And $TestChunk < 256) Then
+			If ($TestChunk <> 47 And $TestChunk <> 92 And $TestChunk <> 58 And $TestChunk <> 42 And $TestChunk <> 63 And $TestChunk <> 34 And $TestChunk <> 60 And $TestChunk <> 62) Then
+				ContinueLoop
+			Else
+				Return 0
+			EndIf
 			ContinueLoop
 		Else
 			Return 0

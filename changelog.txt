@@ -1,5 +1,11 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.14
+Split the extended filename check into 2, 1 for valid character and 1 for valid Windows filename character.
+Made all 3 extended checks independent on unicode configuration.
+Changed default unicode configuration to 1.
+Removed previous scan mode 1, and renamed scan mode 2 to just scan mode.
+
 1.0.0.13
 Added more validation check.
 Added support for identifying records spanning across sectors while in scan mode 2.
