@@ -1,5 +1,10 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.15
+Fixed some configuration values not being logged.
+Fixed character set in the generated sql to be utf8 when applicable.
+Changed Reason column in UsnJrnl table of sql to be VARCHAR(255).
+
 1.0.0.14
 Split the extended filename check into 2, 1 for valid character and 1 for valid Windows filename character.
 Made all 3 extended checks independent on unicode configuration.

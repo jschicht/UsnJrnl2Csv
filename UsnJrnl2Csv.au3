@@ -4,7 +4,7 @@
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.14
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.15
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Include <WinAPIEx.au3>
@@ -26,7 +26,7 @@ Global $USN_Page_Size = 4096, $Remainder="", $nBytes
 Global $ParserOutDir = @ScriptDir
 Global $myctredit, $CheckUnicode, $checkl2t, $checkbodyfile, $checkdefaultall, $SeparatorInput, $checkquotes, $CheckExtendedNameCheckChar, $CheckExtendedNameCheckWindows, $CheckExtendedTimestampCheck
 
-$Progversion = "UsnJrnl2Csv 1.0.0.14"
+$Progversion = "UsnJrnl2Csv 1.0.0.15"
 If $cmdline[0] > 0 Then
 	$CommandlineMode = 1
 	ConsoleWrite($Progversion & @CRLF)
@@ -188,11 +188,10 @@ Func _Main()
 		;$EncodingWhenOpen = 2+32 ;ucs2
 		$EncodingWhenOpen = 2+128 ;utf8 w/bom
 		If Not $CommandlineMode Then _DisplayInfo("UNICODE configured" & @CRLF)
-		_DumpOutput("UNICODE configured" & @CRLF)
 	Else
+		$TestUnicode = 0
 		$EncodingWhenOpen = 2
 		If Not $CommandlineMode Then _DisplayInfo("ANSI configured" & @CRLF)
-		_DumpOutput("ANSI configured" & @CRLF)
 	EndIf
 
 	If $CommandlineMode Then
@@ -231,7 +230,6 @@ Func _Main()
 	Else
 		$ExtendedNameCheckChar=0
 	EndIf
-	_DumpOutput("Extended filename check Char: " & $ExtendedNameCheckChar & @CRLF)
 
 	If $CommandlineMode Then
 		$ExtendedNameCheckWindows = $CheckExtendedNameCheckWindows
@@ -244,7 +242,6 @@ Func _Main()
 	Else
 		$ExtendedNameCheckWindows=0
 	EndIf
-	_DumpOutput("Extended filename check Windows: " & $ExtendedNameCheckWindows & @CRLF)
 
 	If $ExtendedNameCheckChar And $ExtendedNameCheckWindows Then
 		$ExtendedNameCheckAll = 1
@@ -263,7 +260,6 @@ Func _Main()
 	Else
 		$ExtendedTimestampCheck=0
 	EndIf
-	_DumpOutput("Extended timestamp check: " & $ExtendedTimestampCheck & @CRLF)
 
 	If Not FileExists($File) Then
 		If Not $CommandlineMode Then _DisplayInfo("Error: No $UsnJrnl chosen for input" & @CRLF)
@@ -291,6 +287,10 @@ Func _Main()
 	_DumpOutput("Using $UsnJrnl: " & $File & @CRLF)
 	_DumpOutput("Quotes configuration: " & $WithQuotes & @CRLF)
 	_DumpOutput("USN_PAGE_SIZE: " & $USN_Page_Size & @CRLF)
+	_DumpOutput("UNICODE configuration: " & $TestUnicode & @CRLF)
+	_DumpOutput("Extended timestamp check: " & $ExtendedTimestampCheck & @CRLF)
+	_DumpOutput("Extended filename check Windows: " & $ExtendedNameCheckWindows & @CRLF)
+	_DumpOutput("Extended filename check Char: " & $ExtendedNameCheckChar & @CRLF)
 
 	If Not $CommandlineMode Then
 		If GUICtrlRead($CheckScanMode) = 1 Then
@@ -317,7 +317,7 @@ Func _Main()
 	$FixedPath = StringReplace($UsnJrnlCsvFile,"\","\\")
 	Sleep(500)
 	_ReplaceStringInFile($UsnJrnlSqlFile,"__PathToCsv__",$FixedPath)
-	If $CheckUnicode = 1 Then _ReplaceStringInFile($UsnJrnlSqlFile,"latin1", "utf8")
+	If $TestUnicode = 1 Then _ReplaceStringInFile($UsnJrnlSqlFile,"latin1", "utf8")
 
 	$Progress = GUICtrlCreateLabel("Decoding $UsnJrnl info and writing to csv", 10, 280,540,20)
 	GUICtrlSetFont($Progress, 12)
@@ -1014,13 +1014,13 @@ Func _ScanModeUsnDecodeRecord($Record)
 	$NameTest = 1
 	Select
 		Case $ExtendedNameCheckAll
-			_DumpOutput("$ExtendedNameCheckAll: " & $ExtendedNameCheckAll & @CRLF)
+;			_DumpOutput("$ExtendedNameCheckAll: " & $ExtendedNameCheckAll & @CRLF)
 			$NameTest = _ValidateCharacterAndWindowsFileName($UsnJrnlFileName)
 		Case $ExtendedNameCheckChar
-			_DumpOutput("$ExtendedNameCheckChar: " & $ExtendedNameCheckChar & @CRLF)
+;			_DumpOutput("$ExtendedNameCheckChar: " & $ExtendedNameCheckChar & @CRLF)
 			$NameTest = _ValidateCharacter($UsnJrnlFileName)
 		Case $ExtendedNameCheckWindows
-			_DumpOutput("$ExtendedNameCheckWindows: " & $ExtendedNameCheckWindows & @CRLF)
+;			_DumpOutput("$ExtendedNameCheckWindows: " & $ExtendedNameCheckWindows & @CRLF)
 			$NameTest = _ValidateWindowsFileName($UsnJrnlFileName)
 	EndSelect
 	If Not $NameTest Then Return SetError(1,0,0)

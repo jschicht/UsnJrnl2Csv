@@ -9,7 +9,7 @@ CREATE TABLE usnjrnl(
   ,`FileName`                VARCHAR(255) NOT NULL
   ,`USN`                     BIGINT  NOT NULL
   ,`Timestamp`               DATETIME(6)  NOT NULL
-  ,`Reason`                  VARCHAR(128) NOT NULL
+  ,`Reason`                  VARCHAR(255) NOT NULL
   ,`MFTReference`            BIGINT  NOT NULL
   ,`MFTReferenceSeqNo`       INTEGER  NOT NULL
   ,`MFTParentReference`      BIGINT  NOT NULL
