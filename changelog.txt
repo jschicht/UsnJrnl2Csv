@@ -1,5 +1,8 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.16
+Fix that improve processing time for scan mode by roughly 20%.
+
 1.0.0.15
 Fixed some configuration values not being logged.
 Fixed character set in the generated sql to be utf8 when applicable.

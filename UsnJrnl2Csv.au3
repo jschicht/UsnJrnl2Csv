@@ -4,7 +4,7 @@
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.15
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.16
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Include <WinAPIEx.au3>
@@ -26,7 +26,7 @@ Global $USN_Page_Size = 4096, $Remainder="", $nBytes
 Global $ParserOutDir = @ScriptDir
 Global $myctredit, $CheckUnicode, $checkl2t, $checkbodyfile, $checkdefaultall, $SeparatorInput, $checkquotes, $CheckExtendedNameCheckChar, $CheckExtendedNameCheckWindows, $CheckExtendedTimestampCheck
 
-$Progversion = "UsnJrnl2Csv 1.0.0.15"
+$Progversion = "UsnJrnl2Csv 1.0.0.16"
 If $cmdline[0] > 0 Then
 	$CommandlineMode = 1
 	ConsoleWrite($Progversion & @CRLF)
@@ -358,15 +358,16 @@ Func _Main()
 			Next
 
 		Case $DoScanMode
-			$tBuffer = DllStructCreate("byte[" & $SectorSize*2 & "]")
-			$MaxPages = Ceiling($InputFileSize/$SectorSize)
+			$ChunkSize = $SectorSize*100
+			$tBuffer = DllStructCreate("byte[" & ($ChunkSize)+$SectorSize & "]")
+			$MaxPages = Ceiling($InputFileSize/($ChunkSize))
 			For $i = 0 To $MaxPages-1
 				$CurrentPage=$i
-				_WinAPI_SetFilePointerEx($hFile, $i*$SectorSize, $FILE_BEGIN)
-				If $i = $MaxPages-1 Then $tBuffer = DllStructCreate("byte[" & $SectorSize*2 & "]")
-				_WinAPI_ReadFile($hFile, DllStructGetPtr($tBuffer), $SectorSize*2, $nBytes)
+				_WinAPI_SetFilePointerEx($hFile, $i*($ChunkSize), $FILE_BEGIN)
+				If $i = $MaxPages-1 Then $tBuffer = DllStructCreate("byte[" & ($ChunkSize)+$SectorSize & "]")
+				_WinAPI_ReadFile($hFile, DllStructGetPtr($tBuffer), ($ChunkSize)+$SectorSize, $nBytes)
 				$RawPage = DllStructGetData($tBuffer, 1)
-				$EntryCounter += _ScanModeUsnProcessPage2(StringMid($RawPage,3),$i*$SectorSize,0)
+				$EntryCounter += _ScanModeUsnProcessPage2(StringMid($RawPage,3),$i*($ChunkSize),0,$ChunkSize)
 				If Not Mod($i,1000) Then
 					FileFlush($UsnJrnlCsv)
 				EndIf
@@ -917,7 +918,7 @@ Func _UsnProcessPage($TargetPage,$OffsetFile,$OffsetChunk)
 	Until $NextOffset-$SizeOfNextUsnRecord > $TotalSizeOfPage
 	Return $LocalUsnCounter
 EndFunc
-
+#cs
 Func _ScanModeUsnProcessPage($TargetPage)
 	Local $NextOffset = 1, $TotalSizeOfPage = StringLen($TargetPage)
 	Do
@@ -938,8 +939,8 @@ Func _ScanModeUsnProcessPage($TargetPage)
 	Until $NextOffset >= $TotalSizeOfPage
 	Return SetError(1,0,0)
 EndFunc
-
-Func _ScanModeUsnProcessPage2($TargetPage,$OffsetFile,$OffsetChunk)
+#ce
+Func _ScanModeUsnProcessPage2($TargetPage,$OffsetFile,$OffsetChunk,$EndOffset)
 	Local $LocalUsnCounter = 0, $NextOffset = 1, $TotalSizeOfPage = StringLen($TargetPage)
 	Do
 		$SizeOfNextUsnRecord = StringMid($TargetPage,$NextOffset,8)
@@ -959,7 +960,7 @@ Func _ScanModeUsnProcessPage2($TargetPage,$OffsetFile,$OffsetChunk)
 			$NextOffset+=2
 		EndIf
 
-	Until $NextOffset > $TotalSizeOfPage Or $NextOffset/2 > $SectorSize
+	Until $NextOffset > $TotalSizeOfPage Or $NextOffset/2 > $EndOffset
 	Return $LocalUsnCounter
 EndFunc
 
