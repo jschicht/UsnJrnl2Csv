@@ -1,8 +1,3 @@
-CREATE DATABASE IF NOT EXISTS Ntfs
-	CHARACTER SET 'utf8'
-	COLLATE 'utf8_general_ci';
-
-USE Ntfs;
 
 CREATE TABLE usnjrnl(
    `Offset`                  VARCHAR(18) NOT NULL
