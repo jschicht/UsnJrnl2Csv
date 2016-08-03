@@ -1,5 +1,9 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.17
+Fixed bug that did not consider /OutputPath: parameter in commandline mode.
+Added exit errorlevel to make it suite better with batch scripting.
+
 1.0.0.16
 Fix that improve processing time for scan mode by roughly 20%.
 

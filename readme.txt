@@ -111,12 +111,17 @@ The available TimeZone's to use are:
 13.00
 14.00
 
+Error levels
+The current exit (error) codes have been implemented in commandline mode, which makes it more suited for batch scripting.
+1. No valid journal entries could be decoded. Empty output.
+
+
 Examples:
 UsnJrnl2Csv.exe /UsnJrnlFile:c:\temp\$UsnJrnl_$J.bin /TimeZone:2.00 /TSFormat:1 /TSPrecision:MilliSec /Unicode:1
 UsnJrnl2Csv.exe /UsnJrnlFile:c:\temp\$UsnJrnl_$J.bin /TimeZone:-10.00 /TSFormat:4 /TSPrecision:NanoSec /Unicode:1
 UsnJrnl2Csv.exe /UsnJrnlFile:c:\temp\$UsnJrnl_$J.bin /TimeZone:3.00 /TSFormat:1 /TSPrecision:MilliSec
 UsnJrnl2Csv.exe /UsnJrnlFile:c:\temp\$UsnJrnl_$J.bin /TSFormat:2 /TSPrecision:None
-UsnJrnl2Csv.exe /UsnJrnlFile:c:\temp\$UsnJrnl_$J.bin /OutoutPath:c:\temp\UsnJrnlOutput /ScanMode:2
+UsnJrnl2Csv.exe /UsnJrnlFile:c:\temp\$UsnJrnl_$J.bin /OutputPath:c:\temp\UsnJrnlOutput /ScanMode:2
 UsnJrnl2Csv.exe /UsnJrnlFile:C:\temp\$UsnJrnl_$J.bin /TSPrecision:NanoSec /ScanMode:1
 
 Last example is a basic that uses common defaults that work out just fine in most cases. Also compatible with MySql imports.

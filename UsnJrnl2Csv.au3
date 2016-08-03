@@ -4,7 +4,7 @@
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.16
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.17
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Include <WinAPIEx.au3>
@@ -20,13 +20,13 @@ Global $_COMMON_KERNEL32DLL=DllOpen("kernel32.dll"), $outputpath=@ScriptDir, $Fi
 Global $ProgressStatus, $ProgressUsnJrnl
 Global $begin, $ElapsedTime, $EntryCounter, $DoScanMode1=0, $DoScanMode=0, $DoNormalMode=1, $SectorSize=512, $ExtendedNameCheckChar=1, $ExtendedNameCheckWindows=1, $ExtendedNameCheckAll=1, $ExtendedTimestampCheck=1
 Global $tDelta = _WinTime_GetUTCToLocalFileTimeDelta()
-Global $DateTimeFormat,$ExampleTimestampVal = "01CD74B3150770B8",$TimestampPrecision, $UTCconfig
+Global $DateTimeFormat,$ExampleTimestampVal = "01CD74B3150770B8",$TimestampPrecision=3, $UTCconfig
 Global $TimestampErrorVal = "0000-00-00 00:00:00"
 Global $USN_Page_Size = 4096, $Remainder="", $nBytes
 Global $ParserOutDir = @ScriptDir
 Global $myctredit, $CheckUnicode, $checkl2t, $checkbodyfile, $checkdefaultall, $SeparatorInput, $checkquotes, $CheckExtendedNameCheckChar, $CheckExtendedNameCheckWindows, $CheckExtendedTimestampCheck
 
-$Progversion = "UsnJrnl2Csv 1.0.0.16"
+$Progversion = "UsnJrnl2Csv 1.0.0.17"
 If $cmdline[0] > 0 Then
 	$CommandlineMode = 1
 	ConsoleWrite($Progversion & @CRLF)
@@ -379,6 +379,19 @@ Func _Main()
 	$MaxPages = $CurrentPage
 	_UsnJrnlProgress()
 	ProgressOff()
+
+	If (_FileCountLines($UsnJrnlCsvFile) < 2) Or $EntryCounter < 1 Then
+		_DumpOutput("Error: No valid $UsnJrnl entries could be decoded." & @CRLF)
+		_WinAPI_CloseHandle($hFile)
+		FileFlush($UsnJrnlCsv)
+		FileClose($UsnJrnlCsv)
+		If Not $CommandlineMode Then
+			_DisplayInfo("Error: No valid $UsnJrnl entries could be decoded." & @CRLF)
+			Return
+		Else
+			Exit(1)
+		EndIf
+	EndIf
 
 	If Not $CommandlineMode Then _DisplayInfo("Entries parsed: " & $EntryCounter & @CRLF)
 	_DumpOutput("Pages processed: " & $MaxPages & @CRLF)
@@ -1074,6 +1087,16 @@ Func _GetInputParams()
 		If StringLeft($cmdline[$i],21) = "/TestFilenameWindows:" Then $CheckExtendedNameCheckWindows = StringMid($cmdline[$i],22)
 		If StringLeft($cmdline[$i],15) = "/TestTimestamp:" Then $CheckExtendedTimestampCheck = StringMid($cmdline[$i],16)
 	Next
+
+	If StringLen($ParserOutDir) > 0 Then
+		If DirGetSize($ParserOutDir) = -1 Then
+			DirCreate($ParserOutDir)
+		Else
+			ConsoleWrite("Warning: Output directory already exist: " & $ParserOutDir & @CRLF)
+		EndIf
+	Else
+		$ParserOutDir = @ScriptDir
+	EndIf
 
 	If StringLen($CheckUnicode) > 0 Then
 		If $CheckUnicode <> 0 And $CheckUnicode <> 1 Then
