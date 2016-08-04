@@ -68,6 +68,13 @@ Boolean value to activate extended filename validation for characters outside va
 Boolean value to activate extended filename validation for characters not conforming to Windows valid filenames. Only used with scan mode. Default value is 1.
 /TestTimestamp:
 Boolean value to activate extended timestamp validation. Default value is 1. Can be 0 or 1.
+/VerifyFragment:
+Boolean value for activating a simple validation on a fragment only, and not full parser. Can be 0 or 1. Will by default write fixed fragment to OutFragment.bin unless otherwise specified in /OutFragmentName:
+/OutFragmentName:
+The output filename to write the fixed fragment to, if /VerifyFragment: is set to 1. If omitted, the default filename is OutFragment.bin.
+/CleanUp:
+Boolean value for cleaning up all output if no entries could be decoded. Default value is 1. Can be 0 or 1. This setting makes the most sense if program is run in loop in batch or similar.
+
 
 The available TimeZone's to use are:
 -12.00
@@ -114,6 +121,9 @@ The available TimeZone's to use are:
 Error levels
 The current exit (error) codes have been implemented in commandline mode, which makes it more suited for batch scripting.
 1. No valid journal entries could be decoded. Empty output.
+4. Failure in writing fixed fragment to output. Validation of fragment succeeded though.
+
+Thus if you get %ERRORLEVEL% == 1 it means nothing was decoded, and if you get %ERRORLEVEL% == 4 then valid records where detected but could not be written to separate output (only used with /VerifyFragment: and /OutFragmentName:).
 
 
 Examples:
@@ -123,6 +133,8 @@ UsnJrnl2Csv.exe /UsnJrnlFile:c:\temp\$UsnJrnl_$J.bin /TimeZone:3.00 /TSFormat:1 
 UsnJrnl2Csv.exe /UsnJrnlFile:c:\temp\$UsnJrnl_$J.bin /TSFormat:2 /TSPrecision:None
 UsnJrnl2Csv.exe /UsnJrnlFile:c:\temp\$UsnJrnl_$J.bin /OutputPath:c:\temp\UsnJrnlOutput /ScanMode:2
 UsnJrnl2Csv.exe /UsnJrnlFile:C:\temp\$UsnJrnl_$J.bin /TSPrecision:NanoSec /ScanMode:1
+UsnJrnl2Csv.exe /UsnJrnlFile:C:\temp\fragment.bin /ScanMode:1 /VerifyFragment:1 /OutputPath:e:\UsnJrnlOutput /OutFragmentName:FragmentCollection.bin /CleanUp:1
+UsnJrnl2Csv.exe /UsnJrnlFile:e:\UsnJrnlOutput\FragmentCollection.bin /OutputPath:e:\UsnJrnlOutput
 
 Last example is a basic that uses common defaults that work out just fine in most cases. Also compatible with MySql imports.
 

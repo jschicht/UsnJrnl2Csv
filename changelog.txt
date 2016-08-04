@@ -1,5 +1,10 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.18
+Added 3 new parameters. /VerifyFragment:, /OutFragmentName: and /CleanUp:. See readme.
+Added additional exit errorlevel for fragment verification mode.
+Added postfix of .empty to csv's generated with 0 hits.
+
 1.0.0.17
 Fixed bug that did not consider /OutputPath: parameter in commandline mode.
 Added exit errorlevel to make it suite better with batch scripting.

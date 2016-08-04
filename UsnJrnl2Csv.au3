@@ -4,7 +4,7 @@
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.17
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.18
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Include <WinAPIEx.au3>
@@ -15,7 +15,7 @@
 #include <EditConstants.au3>
 #include <GuiEdit.au3>
 #Include <FileConstants.au3>
-Global $UsnJrnlCsv, $UsnJrnlCsvFile, $UsnJrnlDbfile, $de="|", $PrecisionSeparator=".", $PrecisionSeparator2="", $sOutputFile, $VerboseOn=false, $SurroundingQuotes=True, $PreviousUsn, $DoDefaultAll, $dol2t, $DoBodyfile, $DebugOutFile
+Global $UsnJrnlCsv, $UsnJrnlCsvFile, $UsnJrnlDbfile, $de="|", $PrecisionSeparator=".", $PrecisionSeparator2="", $sOutputFile, $VerboseOn=false, $SurroundingQuotes=True, $PreviousUsn, $DoDefaultAll, $dol2t, $DoBodyfile, $hDebugOutFile
 Global $_COMMON_KERNEL32DLL=DllOpen("kernel32.dll"), $outputpath=@ScriptDir, $File, $MaxPages, $CurrentPage, $WithQuotes, $EncodingWhenOpen=2
 Global $ProgressStatus, $ProgressUsnJrnl
 Global $begin, $ElapsedTime, $EntryCounter, $DoScanMode1=0, $DoScanMode=0, $DoNormalMode=1, $SectorSize=512, $ExtendedNameCheckChar=1, $ExtendedNameCheckWindows=1, $ExtendedNameCheckAll=1, $ExtendedTimestampCheck=1
@@ -23,10 +23,10 @@ Global $tDelta = _WinTime_GetUTCToLocalFileTimeDelta()
 Global $DateTimeFormat,$ExampleTimestampVal = "01CD74B3150770B8",$TimestampPrecision=3, $UTCconfig
 Global $TimestampErrorVal = "0000-00-00 00:00:00"
 Global $USN_Page_Size = 4096, $Remainder="", $nBytes
-Global $ParserOutDir = @ScriptDir
+Global $ParserOutDir = @ScriptDir, $VerifyFragment=0, $OutFragmentName="OutFragment.bin", $RebuiltFragment, $CleanUp=0, $DebugOutFile
 Global $myctredit, $CheckUnicode, $checkl2t, $checkbodyfile, $checkdefaultall, $SeparatorInput, $checkquotes, $CheckExtendedNameCheckChar, $CheckExtendedNameCheckWindows, $CheckExtendedTimestampCheck
 
-$Progversion = "UsnJrnl2Csv 1.0.0.17"
+$Progversion = "UsnJrnl2Csv 1.0.0.18"
 If $cmdline[0] > 0 Then
 	$CommandlineMode = 1
 	ConsoleWrite($Progversion & @CRLF)
@@ -277,7 +277,8 @@ Func _Main()
 		Return
 	EndIf
 
-	$DebugOutFile = FileOpen($ParserOutDir & "\UsnJrnl_"&$TimestampStart&".log", $EncodingWhenOpen)
+	$DebugOutFile = $ParserOutDir & "\UsnJrnl_"&$TimestampStart&".log"
+	$hDebugOutFile = FileOpen($DebugOutFile, $EncodingWhenOpen)
 	If @error Then
 		ConsoleWrite("Error: Could not create log file" & @CRLF)
 		MsgBox(0,"Error","Could not create log file")
@@ -380,11 +381,22 @@ Func _Main()
 	_UsnJrnlProgress()
 	ProgressOff()
 
-	If (_FileCountLines($UsnJrnlCsvFile) < 2) Or $EntryCounter < 1 Then
+	_WinAPI_CloseHandle($hFile)
+	FileFlush($UsnJrnlCsv)
+	FileClose($UsnJrnlCsv)
+
+	If $EntryCounter < 1 Then
 		_DumpOutput("Error: No valid $UsnJrnl entries could be decoded." & @CRLF)
-		_WinAPI_CloseHandle($hFile)
-		FileFlush($UsnJrnlCsv)
-		FileClose($UsnJrnlCsv)
+		If $CleanUp Then
+			FileFlush($hDebugOutFile)
+			FileClose($hDebugOutFile)
+			FileDelete($UsnJrnlCsvFile)
+			FileDelete($UsnJrnlSqlFile)
+			FileDelete($DebugOutFile)
+		Else
+			FileMove($UsnJrnlCsvFile,$UsnJrnlCsvFile&".empty",1)
+			_DumpOutput("Empty output: " & $UsnJrnlCsvFile & " is postfixed with .empty" & @CRLF)
+		EndIf
 		If Not $CommandlineMode Then
 			_DisplayInfo("Error: No valid $UsnJrnl entries could be decoded." & @CRLF)
 			Return
@@ -398,9 +410,15 @@ Func _Main()
 	_DumpOutput("Entries parsed: " & $EntryCounter & @CRLF)
 	If Not $CommandlineMode Then _DisplayInfo("Parsing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
 	_DumpOutput("Parsing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
-	_WinAPI_CloseHandle($hFile)
-	FileFlush($UsnJrnlCsv)
-	FileClose($UsnJrnlCsv)
+
+	FileFlush($hDebugOutFile)
+	FileClose($hDebugOutFile)
+
+	If $CleanUp Then
+		FileDelete($UsnJrnlCsvFile)
+		FileDelete($UsnJrnlSqlFile)
+		FileDelete($DebugOutFile)
+	EndIf
 	Return
 EndFunc
 
@@ -466,10 +484,27 @@ Func _UsnDecodeRecord($Record, $OffsetRecord)
 	#ce
 	If $USN_Page_Size > $UsnJrnlRecordLength And Int($UsnJrnlFileReferenceNumber) > 0 And Int($UsnJrnlMFTReferenceSeqNo) > 0 And Int($UsnJrnlParentFileReferenceNumber) > 4 And $UsnJrnlFileNameLength > 0  And $TimestampOk And $UsnJrnlTimestamp <> $TimestampErrorVal Then
 		$DecodeOk=1
-		If $WithQuotes Then
-			FileWriteLine($UsnJrnlCsv, '"'&$OffsetRecord&'"'&$de&'"'&$UsnJrnlFileName&'"'&$de&'"'&$UsnJrnlUsn&'"'&$de&'"'&$UsnJrnlTimestamp&'"'&$de&'"'&$UsnJrnlReason&'"'&$de&'"'&$UsnJrnlFileReferenceNumber&'"'&$de&'"'&$UsnJrnlMFTReferenceSeqNo&'"'&$de&'"'&$UsnJrnlParentFileReferenceNumber&'"'&$de&'"'&$UsnJrnlParentReferenceSeqNo&'"'&$de&'"'&$UsnJrnlFileAttributes&'"'&$de&'"'&$UsnJrnlMajorVersion&'"'&$de&'"'&$UsnJrnlMinorVersion&'"'&$de&'"'&$UsnJrnlSourceInfo&'"'&$de&'"'&$UsnJrnlSecurityId&'"'&@CRLF)
+		If $VerifyFragment Then
+			$RebuiltFragment = "0x" & StringMid($Record,1,120 + ($UsnJrnlFileNameLength*2))
+			;ConsoleWrite(_HexEncode($RebuiltFragment) & @CRLF)
+			_WriteOutputFragment()
+			If @error Then
+				If Not $CommandlineMode Then
+					_DisplayInfo("Output fragment was verified but could not be written to: " & $ParserOutDir & "\" & $OutFragmentName & @CRLF)
+					Return SetError(1)
+				Else
+					_DumpOutput("Output fragment was verified but could not be written to: " & $ParserOutDir & "\" & $OutFragmentName & @CRLF)
+					Exit(4)
+				EndIf
+			Else
+				ConsoleWrite("Output fragment verified and written to: " & $ParserOutDir & "\" & $OutFragmentName & @CRLF)
+			EndIf
 		Else
-			FileWriteLine($UsnJrnlCsv, $OffsetRecord&$de&$UsnJrnlFileName&$de&$UsnJrnlUsn&$de&$UsnJrnlTimestamp&$de&$UsnJrnlReason&$de&$UsnJrnlFileReferenceNumber&$de&$UsnJrnlMFTReferenceSeqNo&$de&$UsnJrnlParentFileReferenceNumber&$de&$UsnJrnlParentReferenceSeqNo&$de&$UsnJrnlFileAttributes&$de&$UsnJrnlMajorVersion&$de&$UsnJrnlMinorVersion&$de&$UsnJrnlSourceInfo&$de&$UsnJrnlSecurityId&@crlf)
+			If $WithQuotes Then
+				FileWriteLine($UsnJrnlCsv, '"'&$OffsetRecord&'"'&$de&'"'&$UsnJrnlFileName&'"'&$de&'"'&$UsnJrnlUsn&'"'&$de&'"'&$UsnJrnlTimestamp&'"'&$de&'"'&$UsnJrnlReason&'"'&$de&'"'&$UsnJrnlFileReferenceNumber&'"'&$de&'"'&$UsnJrnlMFTReferenceSeqNo&'"'&$de&'"'&$UsnJrnlParentFileReferenceNumber&'"'&$de&'"'&$UsnJrnlParentReferenceSeqNo&'"'&$de&'"'&$UsnJrnlFileAttributes&'"'&$de&'"'&$UsnJrnlMajorVersion&'"'&$de&'"'&$UsnJrnlMinorVersion&'"'&$de&'"'&$UsnJrnlSourceInfo&'"'&$de&'"'&$UsnJrnlSecurityId&'"'&@CRLF)
+			Else
+				FileWriteLine($UsnJrnlCsv, $OffsetRecord&$de&$UsnJrnlFileName&$de&$UsnJrnlUsn&$de&$UsnJrnlTimestamp&$de&$UsnJrnlReason&$de&$UsnJrnlFileReferenceNumber&$de&$UsnJrnlMFTReferenceSeqNo&$de&$UsnJrnlParentFileReferenceNumber&$de&$UsnJrnlParentReferenceSeqNo&$de&$UsnJrnlFileAttributes&$de&$UsnJrnlMajorVersion&$de&$UsnJrnlMinorVersion&$de&$UsnJrnlSourceInfo&$de&$UsnJrnlSecurityId&@crlf)
+			EndIf
 		EndIf
 	Else
 		_DumpOutput("Error: Bad entry at offset " & $OffsetRecord & ":" & @CRLF)
@@ -909,7 +944,7 @@ EndFunc
 
 Func _DumpOutput($text)
    ConsoleWrite($text)
-   If $DebugOutFile Then FileWrite($DebugOutFile, $text)
+   If $hDebugOutFile Then FileWrite($hDebugOutFile, $text)
 EndFunc
 
 Func _UsnProcessPage($TargetPage,$OffsetFile,$OffsetChunk)
@@ -1086,6 +1121,9 @@ Func _GetInputParams()
 		If StringLeft($cmdline[$i],18) = "/TestFilenameChar:" Then $CheckExtendedNameCheckChar = StringMid($cmdline[$i],19)
 		If StringLeft($cmdline[$i],21) = "/TestFilenameWindows:" Then $CheckExtendedNameCheckWindows = StringMid($cmdline[$i],22)
 		If StringLeft($cmdline[$i],15) = "/TestTimestamp:" Then $CheckExtendedTimestampCheck = StringMid($cmdline[$i],16)
+		If StringLeft($cmdline[$i],16) = "/VerifyFragment:" Then $VerifyFragment = StringMid($cmdline[$i],17)
+		If StringLeft($cmdline[$i],17) = "/OutFragmentName:" Then $OutFragmentName = StringMid($cmdline[$i],18)
+		If StringLeft($cmdline[$i],9) = "/CleanUp:" Then $CleanUp = StringMid($cmdline[$i],10)
 	Next
 
 	If StringLen($ParserOutDir) > 0 Then
@@ -1254,6 +1292,25 @@ Func _GetInputParams()
 	Else
 		$DateTimeFormat = 6
 	EndIf
+
+	If StringLen($VerifyFragment) > 0 Then
+		If $VerifyFragment <> 1 Then
+			$VerifyFragment = 0
+		EndIf
+	EndIf
+
+	If StringLen($OutFragmentName) > 0 Then
+		If StringInStr($OutFragmentName,"\") Then
+			ConsoleWrite("Error: OutFragmentName must be a filename and not a path." & @CRLF)
+			Exit
+		EndIf
+	EndIf
+
+	If StringLen($CleanUp) > 0 Then
+		If $CleanUp <> 1 Then
+			$CleanUp = 0
+		EndIf
+	EndIf
 EndFunc
 
 Func _ValidateCharacter($InputString)
@@ -1303,4 +1360,35 @@ Func _ValidateCharacterAndWindowsFileName($InputString)
 		EndIf
 	Next
 	Return 1
+EndFunc
+
+Func _WriteOutputFragment()
+	Local $nBytes, $Offset
+
+	$Size = BinaryLen($RebuiltFragment)
+	$Size2 = $Size
+	If Mod($Size,0x8) Then
+		ConsoleWrite("SizeOf $RebuiltFragment: " & $Size & @CRLF)
+		While 1
+			$RebuiltFragment &= "00"
+			$Size2 += 1
+			If Mod($Size2,0x8) = 0 Then ExitLoop
+		WEnd
+		ConsoleWrite("Corrected SizeOf $RebuiltFragment: " & $Size2 & @CRLF)
+	EndIf
+
+	Local $tBuffer = DllStructCreate("byte[" & $Size2 & "]")
+	DllStructSetData($tBuffer,1,$RebuiltFragment)
+	If @error Then Return SetError(1)
+	Local $OutFile = $ParserOutDir & "\" & $OutFragmentName
+	If Not FileExists($OutFile) Then
+		$Offset = 0
+	Else
+		$Offset = FileGetSize($OutFile)
+	EndIf
+	Local $hFileOut = _WinAPI_CreateFile("\\.\" & $OutFile,3,6,7)
+	If Not $hFileOut Then Return SetError(1)
+	_WinAPI_SetFilePointerEx($hFileOut, $Offset, $FILE_BEGIN)
+	If Not _WinAPI_WriteFile($hFileOut, DllStructGetPtr($tBuffer), DllStructGetSize($tBuffer), $nBytes) Then Return SetError(1)
+	_WinAPI_CloseHandle($hFileOut)
 EndFunc
