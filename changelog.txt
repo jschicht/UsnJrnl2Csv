@@ -1,5 +1,8 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.19
+Recompiled with AutoIt version 3.3.14.2, which fixes certain Windows 10 ui issues.
+
 1.0.0.18
 Added 3 new parameters. /VerifyFragment:, /OutFragmentName: and /CleanUp:. See readme.
 Added additional exit errorlevel for fragment verification mode.
