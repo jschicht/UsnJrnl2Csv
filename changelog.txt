@@ -1,5 +1,8 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.20
+Moved the import sql files into the new import-sql sub directory so that compilation works with the project as is.
+
 1.0.0.19
 Recompiled with AutoIt version 3.3.14.2, which fixes certain Windows 10 ui issues.
 

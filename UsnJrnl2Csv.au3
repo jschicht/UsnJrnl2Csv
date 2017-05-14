@@ -1,9 +1,10 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=C:\Program Files (x86)\AutoIt3\Icons\au3script_v9.ico
+#AutoIt3Wrapper_UseUpx=y
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.19
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.20
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Include <WinAPIEx.au3>
@@ -25,7 +26,7 @@ Global $USN_Page_Size = 4096, $Remainder="", $nBytes
 Global $ParserOutDir = @ScriptDir, $VerifyFragment=0, $OutFragmentName="OutFragment.bin", $RebuiltFragment, $CleanUp=0, $DebugOutFile
 Global $myctredit, $CheckUnicode, $checkl2t, $checkbodyfile, $checkdefaultall, $SeparatorInput, $checkquotes, $CheckExtendedNameCheckChar, $CheckExtendedNameCheckWindows, $CheckExtendedTimestampCheck
 
-$Progversion = "UsnJrnl2Csv 1.0.0.19"
+$Progversion = "UsnJrnl2Csv 1.0.0.20"
 If $cmdline[0] > 0 Then
 	$CommandlineMode = 1
 	ConsoleWrite($Progversion & @CRLF)
@@ -313,7 +314,7 @@ Func _Main()
 ;	_DumpOutput("------------------- END CONFIGURATION -----------------------" & @CRLF)
 
 	$UsnJrnlSqlFile = $ParserOutDir & "\UsnJrnl_"&$TimestampStart&".sql"
-	FileInstall("C:\temp\import-csv-usnjrnl.sql", $UsnJrnlSqlFile)
+	FileInstall(".\import-sql\import-csv-usnjrnl.sql", $UsnJrnlSqlFile)
 	$FixedPath = StringReplace($UsnJrnlCsvFile,"\","\\")
 	Sleep(500)
 	_ReplaceStringInFile($UsnJrnlSqlFile,"__PathToCsv__",$FixedPath)
