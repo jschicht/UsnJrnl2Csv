@@ -1,5 +1,8 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.21
+Added missing reason and source codes.
+
 1.0.0.20
 Moved the import sql files into the new import-sql sub directory so that compilation works with the project as is.
 

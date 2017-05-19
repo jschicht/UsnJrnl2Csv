@@ -4,7 +4,7 @@
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.20
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.21
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Include <WinAPIEx.au3>
@@ -26,7 +26,7 @@ Global $USN_Page_Size = 4096, $Remainder="", $nBytes
 Global $ParserOutDir = @ScriptDir, $VerifyFragment=0, $OutFragmentName="OutFragment.bin", $RebuiltFragment, $CleanUp=0, $DebugOutFile
 Global $myctredit, $CheckUnicode, $checkl2t, $checkbodyfile, $checkdefaultall, $SeparatorInput, $checkquotes, $CheckExtendedNameCheckChar, $CheckExtendedNameCheckWindows, $CheckExtendedTimestampCheck
 
-$Progversion = "UsnJrnl2Csv 1.0.0.20"
+$Progversion = "UsnJrnl2Csv 1.0.0.21"
 If $cmdline[0] > 0 Then
 	$CommandlineMode = 1
 	ConsoleWrite($Progversion & @CRLF)
@@ -539,6 +539,7 @@ Func _DecodeReasonCodes($USNReasonInput)
 	If BitAND($USNReasonInput, 0x00200000) Then $USNReasonOutput &= 'STREAM_CHANGE+'
 	If BitAND($USNReasonInput, 0x00800000) Then $USNReasonOutput &= 'INTEGRITY_CHANGE+'
 	If BitAND($USNReasonInput, 0x00400000) Then $USNReasonOutput &= 'TRANSACTED_CHANGE+'
+	If BitAND($USNReasonInput, 0x01000000) Then $USNReasonOutput &= 'DESIRED_STORAGE_CLASS_CHANGE+'
 	$USNReasonOutput = StringTrimRight($USNReasonOutput, 1)
 	Return $USNReasonOutput
 EndFunc
@@ -576,6 +577,8 @@ Func _DecodeSourceInfoFlag($input)
 			$ret = "USN_SOURCE_AUXILIARY_DATA"
 		Case $input = 0x00000004
 			$ret = "USN_SOURCE_REPLICATION_MANAGEMENT"
+		Case $input = 0x00000008
+			$ret = "USN_SOURCE_CLIENT_REPLICATION_MANAGEMENT"
 		Case Else
 			$ret = "EMPTY"
 	EndSelect
