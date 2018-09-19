@@ -1,5 +1,8 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.22
+Fixed bug that prevented separator to be configured.
+
 1.0.0.21
 Added missing reason and source codes.
 

@@ -1,10 +1,13 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
-#AutoIt3Wrapper_Icon=C:\Program Files (x86)\AutoIt3\Icons\au3script_v9.ico
-#AutoIt3Wrapper_UseUpx=y
+#AutoIt3Wrapper_Icon=C:\Program Files (x86)\AutoIt3\Icons\au3.ico
+#AutoIt3Wrapper_Outfile=UsnJrnl2Csv.exe
+#AutoIt3Wrapper_Outfile_x64=UsnJrnl2Csv64.exe
+#AutoIt3Wrapper_Compile_Both=y
+#AutoIt3Wrapper_UseX64=y
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.21
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.22
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Include <WinAPIEx.au3>
@@ -26,7 +29,7 @@ Global $USN_Page_Size = 4096, $Remainder="", $nBytes
 Global $ParserOutDir = @ScriptDir, $VerifyFragment=0, $OutFragmentName="OutFragment.bin", $RebuiltFragment, $CleanUp=0, $DebugOutFile
 Global $myctredit, $CheckUnicode, $checkl2t, $checkbodyfile, $checkdefaultall, $SeparatorInput, $checkquotes, $CheckExtendedNameCheckChar, $CheckExtendedNameCheckWindows, $CheckExtendedTimestampCheck
 
-$Progversion = "UsnJrnl2Csv 1.0.0.21"
+$Progversion = "UsnJrnl2Csv 1.0.0.22"
 If $cmdline[0] > 0 Then
 	$CommandlineMode = 1
 	ConsoleWrite($Progversion & @CRLF)
@@ -55,9 +58,9 @@ Else
 	$Combo2 = GUICtrlCreateCombo("", 230, 45, 85, 25)
 
 	$LabelSeparator = GUICtrlCreateLabel("Set separator:",20,70,70,20)
-	$SaparatorInput = GUICtrlCreateInput($de,90,70,20,20)
-	$SaparatorInput2 = GUICtrlCreateInput($de,120,70,30,20)
-	GUICtrlSetState($SaparatorInput2, $GUI_DISABLE)
+	$SeparatorInput = GUICtrlCreateInput($de,90,70,20,20)
+	$SeparatorInput2 = GUICtrlCreateInput($de,120,70,30,20)
+	GUICtrlSetState($SeparatorInput2, $GUI_DISABLE)
 	$checkquotes = GUICtrlCreateCheckbox("Quotation mark", 180, 70, 90, 20)
 	GUICtrlSetState($checkquotes, $GUI_UNCHECKED)
 	$CheckUnicode = GUICtrlCreateCheckbox("Unicode", 180, 90, 60, 20)
@@ -147,6 +150,12 @@ Func _Main()
 		ElseIf GUICtrlRead($checkdefaultall) = 1 Then
 			$DoDefaultAll = True
 		EndIf
+	EndIf
+
+	If Not $CommandlineMode Then
+		$de = GUICtrlRead($SeparatorInput)
+	Else
+		$de = $SeparatorInput
 	EndIf
 
 	If Not $CommandlineMode Then
@@ -896,8 +905,8 @@ EndFunc
 
 Func _TranslateSeparator()
 	; Or do it the other way around to allow setting other trickier separators, like specifying it in hex
-	GUICtrlSetData($SaparatorInput,StringLeft(GUICtrlRead($SaparatorInput),1))
-	GUICtrlSetData($SaparatorInput2,"0x"&Hex(Asc(GUICtrlRead($SaparatorInput)),2))
+	GUICtrlSetData($SeparatorInput,StringLeft(GUICtrlRead($SeparatorInput),1))
+	GUICtrlSetData($SeparatorInput2,"0x"&Hex(Asc(GUICtrlRead($SeparatorInput)),2))
 EndFunc
 
 Func _InjectTimestampFormat()
