@@ -1,5 +1,10 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.23
+Added support for new output formats; bodyfile and log2timeline.
+Added db schemas for the new output formats.
+Fixed bug that prevented sql file from running when timestamp format <> 6.
+
 1.0.0.22
 Fixed bug that prevented separator to be configured.
 

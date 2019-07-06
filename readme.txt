@@ -41,7 +41,7 @@ The output path of where to put output. Defaults to program directory.
 /TimeZone:
 A string value for the timezone. See notes further down for valid values.
 /OutputFormat:
-The output format of csv. Valid values can be l2t, BodyFile, all.
+The output format of csv. Valid values can be l2t, bodyfile, all. Default is all.
 /Separator:
 The separator to use in the csv. Default is |
 /QuotationMark:
@@ -133,6 +133,7 @@ UsnJrnl2Csv.exe /UsnJrnlFile:c:\temp\$UsnJrnl_$J.bin /TimeZone:3.00 /TSFormat:1 
 UsnJrnl2Csv.exe /UsnJrnlFile:c:\temp\$UsnJrnl_$J.bin /TSFormat:2 /TSPrecision:None
 UsnJrnl2Csv.exe /UsnJrnlFile:c:\temp\$UsnJrnl_$J.bin /OutputPath:c:\temp\UsnJrnlOutput /ScanMode:2
 UsnJrnl2Csv.exe /UsnJrnlFile:C:\temp\$UsnJrnl_$J.bin /TSPrecision:NanoSec /ScanMode:1
+UsnJrnl2Csv.exe /UsnJrnlFile:C:\temp\$UsnJrnl_$J.bin /TSPrecision:NanoSec /TSFormat:2 /ScanMode:1 /OutputFormat:bodyfile
 UsnJrnl2Csv.exe /UsnJrnlFile:C:\temp\fragment.bin /ScanMode:1 /VerifyFragment:1 /OutputPath:e:\UsnJrnlOutput /OutFragmentName:FragmentCollection.bin /CleanUp:1
 UsnJrnl2Csv.exe /UsnJrnlFile:e:\UsnJrnlOutput\FragmentCollection.bin /OutputPath:e:\UsnJrnlOutput
 
@@ -140,5 +141,4 @@ Last example is a basic that uses common defaults that work out just fine in mos
 
 
 ToDo
-Add support for output format in log2timeline and bodyformat.
 Add support for USN_RECORD_V4.

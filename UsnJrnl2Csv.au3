@@ -7,8 +7,10 @@
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.22
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.23
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
+#AutoIt3Wrapper_AU3Check_Parameters=-w 3 -w 5
+#AutoIt3Wrapper_Run_Au3Stripper=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Include <WinAPIEx.au3>
 #Include <File.au3>
@@ -18,7 +20,7 @@
 #include <EditConstants.au3>
 #include <GuiEdit.au3>
 #Include <FileConstants.au3>
-Global $UsnJrnlCsv, $UsnJrnlCsvFile, $UsnJrnlDbfile, $de="|", $PrecisionSeparator=".", $PrecisionSeparator2="", $sOutputFile, $VerboseOn=false, $SurroundingQuotes=True, $PreviousUsn, $DoDefaultAll, $dol2t, $DoBodyfile, $hDebugOutFile
+Global $UsnJrnlCsv, $UsnJrnlCsvFile, $UsnJrnlDbfile, $de="|", $PrecisionSeparator=".", $PrecisionSeparator2="", $sOutputFile, $VerboseOn=false, $SurroundingQuotes=True, $PreviousUsn, $DoDefaultAll, $Dol2t, $DoBodyfile, $hDebugOutFile
 Global $_COMMON_KERNEL32DLL=DllOpen("kernel32.dll"), $outputpath=@ScriptDir, $File, $MaxPages, $CurrentPage, $WithQuotes, $EncodingWhenOpen=2
 Global $ProgressStatus, $ProgressUsnJrnl
 Global $begin, $ElapsedTime, $EntryCounter, $DoScanMode1=0, $DoScanMode=0, $DoNormalMode=1, $SectorSize=512, $ExtendedNameCheckChar=1, $ExtendedNameCheckWindows=1, $ExtendedNameCheckAll=1, $ExtendedTimestampCheck=1
@@ -28,8 +30,9 @@ Global $TimestampErrorVal = "0000-00-00 00:00:00"
 Global $USN_Page_Size = 4096, $Remainder="", $nBytes
 Global $ParserOutDir = @ScriptDir, $VerifyFragment=0, $OutFragmentName="OutFragment.bin", $RebuiltFragment, $CleanUp=0, $DebugOutFile
 Global $myctredit, $CheckUnicode, $checkl2t, $checkbodyfile, $checkdefaultall, $SeparatorInput, $checkquotes, $CheckExtendedNameCheckChar, $CheckExtendedNameCheckWindows, $CheckExtendedTimestampCheck
+Global $CharsToGrabDate, $CharStartTime, $CharsToGrabTime
 
-$Progversion = "UsnJrnl2Csv 1.0.0.22"
+$Progversion = "UsnJrnl2Csv 1.0.0.23"
 If $cmdline[0] > 0 Then
 	$CommandlineMode = 1
 	ConsoleWrite($Progversion & @CRLF)
@@ -66,15 +69,18 @@ Else
 	$CheckUnicode = GUICtrlCreateCheckbox("Unicode", 180, 90, 60, 20)
 	GUICtrlSetState($CheckUnicode, $GUI_CHECKED)
 
-	$checkl2t = GUICtrlCreateCheckbox("log2timeline", 20, 100, 130, 20)
-	GUICtrlSetState($checkl2t, $GUI_UNCHECKED)
-	GUICtrlSetState($checkl2t, $GUI_DISABLE)
-	$checkbodyfile = GUICtrlCreateCheckbox("bodyfile", 20, 120, 130, 20)
-	GUICtrlSetState($checkbodyfile, $GUI_UNCHECKED)
-	GUICtrlSetState($checkbodyfile, $GUI_DISABLE)
-	$checkdefaultall = GUICtrlCreateCheckbox("dump everything", 20, 140, 130, 20)
-	GUICtrlSetState($checkdefaultall, $GUI_CHECKED)
-	GUICtrlSetState($checkdefaultall, $GUI_DISABLE)
+	;$checkl2t = GUICtrlCreateCheckbox("log2timeline", 20, 100, 130, 20)
+	$checkl2t = GUICtrlCreateRadio("log2timeline", 20, 100, 130, 20)
+	;GUICtrlSetState($checkl2t, $GUI_UNCHECKED)
+	;GUICtrlSetState($checkl2t, $GUI_DISABLE)
+	;$checkbodyfile = GUICtrlCreateCheckbox("bodyfile", 20, 120, 100, 20)
+	$checkbodyfile = GUICtrlCreateRadio("bodyfile", 20, 120, 100, 20)
+	;GUICtrlSetState($checkbodyfile, $GUI_UNCHECKED)
+	;GUICtrlSetState($checkbodyfile, $GUI_DISABLE)
+	;$checkdefaultall = GUICtrlCreateCheckbox("dump everything", 20, 140, 130, 20)
+	$checkdefaultall = GUICtrlCreateRadio("dump everything", 20, 140, 110, 20)
+	;GUICtrlSetState($checkdefaultall, $GUI_CHECKED)
+	;GUICtrlSetState($checkdefaultall, $GUI_DISABLE)
 
 	$LabelBrokenData = GUICtrlCreateLabel("Broken data:",130,120,65,20)
 	$CheckScanMode = GUICtrlCreateCheckbox("Scan mode", 200, 120, 80, 20)
@@ -128,6 +134,9 @@ Else
 				If Not @error Then _DisplayInfo("Input: " & $File & @CRLF)
 			Case $nMsg = $ButtonStart
 				_Main()
+				GUICtrlSetState($checkl2t, $GUI_UNCHECKED)
+				GUICtrlSetState($checkbodyfile, $GUI_UNCHECKED)
+				GUICtrlSetState($checkdefaultall, $GUI_UNCHECKED)
 			Case $nMsg = $GUI_EVENT_CLOSE
 				Exit
 		EndSelect
@@ -135,20 +144,30 @@ Else
 EndIf
 
 Func _Main()
-	Global $EntryCounter=0
+	$EntryCounter=0
 	GUICtrlSetData($ProgressUsnJrnl, 0)
 
 	If Not $CommandlineMode Then
 		If Int(GUICtrlRead($checkl2t) + GUICtrlRead($checkbodyfile) + GUICtrlRead($checkdefaultall)) <> 9 Then
-			_DisplayInfo("Error: Output format can only be one of the options (not more than 1)." & @CRLF)
+			_DisplayInfo("Error: Output format must be set to 1 of the 3 options." & @CRLF)
 			Return
 		EndIf
+		$Dol2t = False
+		$DoBodyfile = False
+		$DoDefaultAll = False
 		If GUICtrlRead($checkl2t) = 1 Then
 			$Dol2t = True
 		ElseIf GUICtrlRead($checkbodyfile) = 1 Then
 			$DoBodyfile = True
 		ElseIf GUICtrlRead($checkdefaultall) = 1 Then
 			$DoDefaultAll = True
+		EndIf
+	EndIf
+
+	If Not $CommandlineMode Then
+		If ($DateTimeFormat = 4 Or $DateTimeFormat = 5) And ($Dol2t Or $DoBodyfile) Then
+			_DisplayInfo("Error: Timestamp format can't be 4 or 5 in combination with OutputFormat log2timeline and bodyfile" & @CRLF)
+			Return
 		EndIf
 	EndIf
 
@@ -323,11 +342,77 @@ Func _Main()
 ;	_DumpOutput("------------------- END CONFIGURATION -----------------------" & @CRLF)
 
 	$UsnJrnlSqlFile = $ParserOutDir & "\UsnJrnl_"&$TimestampStart&".sql"
-	FileInstall(".\import-sql\import-csv-usnjrnl.sql", $UsnJrnlSqlFile)
-	$FixedPath = StringReplace($UsnJrnlCsvFile,"\","\\")
+	Select
+		Case $DoDefaultAll
+			FileInstall(".\import-sql\import-csv-usnjrnl.sql", $UsnJrnlSqlFile)
+		Case $Dol2t
+			FileInstall(".\import-sql\import-csv-l2t-usnjrnl.sql", $UsnJrnlSqlFile)
+		Case $DoBodyfile
+			FileInstall(".\import-sql\import-csv-bodyfile-usnjrnl.sql", $UsnJrnlSqlFile)
+	EndSelect
+	$FixedPath = StringReplace($UsnJrnlCsvFile, "\","\\")
 	Sleep(500)
-	_ReplaceStringInFile($UsnJrnlSqlFile,"__PathToCsv__",$FixedPath)
-	If $TestUnicode = 1 Then _ReplaceStringInFile($UsnJrnlSqlFile,"latin1", "utf8")
+	_ReplaceStringInFile($UsnJrnlSqlFile, "__PathToCsv__", $FixedPath)
+	If $TestUnicode = 1 Then _ReplaceStringInFile($UsnJrnlSqlFile, "latin1", "utf8")
+	_ReplaceStringInFile($UsnJrnlSqlFile, "__Separator__", $de)
+
+	_SetDateTimeFormats()
+
+	Local $TSPrecisionFormatTransform = ""
+	If $TimestampPrecision > 1 Then
+		$TSPrecisionFormatTransform = $PrecisionSeparator & "%f"
+	EndIf
+
+	Local $TimestampFormatTransform
+	If $DoDefaultAll Or $DoBodyfile Then
+		;usnrnl or bodyfile table
+
+
+		Select
+			Case $DateTimeFormat = 1
+				$TimestampFormatTransform = "%Y%m%d%H%i%s" & $TSPrecisionFormatTransform
+			Case $DateTimeFormat = 2
+				$TimestampFormatTransform = "%m/%d/%Y %H:%i:%s" & $TSPrecisionFormatTransform
+			Case $DateTimeFormat = 3
+				$TimestampFormatTransform = "%d/%m/%Y %H:%i:%s" & $TSPrecisionFormatTransform
+			Case $DateTimeFormat = 4 Or $DateTimeFormat = 5
+				If $CommandlineMode Then
+					ConsoleWrite("WARNING: Loading of sql into database with TSFormat 4 or 5 is not yet supported." & @CRLF)
+				Else
+					_DumpOutput("WARNING: Loading of sql into database with TSFormat 4 or 5 is not yet supported." & @CRLF)
+				EndIf
+			Case $DateTimeFormat = 6
+				$TimestampFormatTransform = "%Y-%m-%d %H:%i:%s" & $TSPrecisionFormatTransform
+		EndSelect
+		_ReplaceStringInFile($UsnJrnlSqlFile, "__TimestampTransformationSyntax__", $TimestampFormatTransform)
+	EndIf
+
+	Local $DateFormatTransform, $TimeFormatTransform
+	If $Dol2t Then
+		;log2timeline table
+		Select
+			Case $DateTimeFormat = 1
+				$DateFormatTransform = "%Y%m%d"
+				$TimeFormatTransform = "%H%i%s"
+			Case $DateTimeFormat = 2
+				$DateFormatTransform = "%m/%d/%Y"
+				$TimeFormatTransform = "%H:%i:%s"
+			Case $DateTimeFormat = 3
+				$DateFormatTransform = "%d/%m/%Y"
+				$TimeFormatTransform = "%H:%i:%s"
+			Case $DateTimeFormat = 4 Or $DateTimeFormat = 5
+				If $CommandlineMode Then
+					ConsoleWrite("WARNING: Loading of sql into database with TSFormat 4 or 5 is not yet supported." & @CRLF)
+				Else
+					_DumpOutput("WARNING: Loading of sql into database with TSFormat 4 or 5 is not yet supported." & @CRLF)
+				EndIf
+			Case $DateTimeFormat = 6
+				$DateFormatTransform = "%Y-%m-%d"
+				$TimeFormatTransform = "%H:%i:%s"
+		EndSelect
+		_ReplaceStringInFile($UsnJrnlSqlFile, "__DateTransformationSyntax__", $DateFormatTransform)
+		_ReplaceStringInFile($UsnJrnlSqlFile, "__TimeTransformationSyntax__", $TimeFormatTransform)
+	EndIf
 
 	$Progress = GUICtrlCreateLabel("Decoding $UsnJrnl info and writing to csv", 10, 280,540,20)
 	GUICtrlSetFont($Progress, 12)
@@ -510,9 +595,23 @@ Func _UsnDecodeRecord($Record, $OffsetRecord)
 			EndIf
 		Else
 			If $WithQuotes Then
-				FileWriteLine($UsnJrnlCsv, '"'&$OffsetRecord&'"'&$de&'"'&$UsnJrnlFileName&'"'&$de&'"'&$UsnJrnlUsn&'"'&$de&'"'&$UsnJrnlTimestamp&'"'&$de&'"'&$UsnJrnlReason&'"'&$de&'"'&$UsnJrnlFileReferenceNumber&'"'&$de&'"'&$UsnJrnlMFTReferenceSeqNo&'"'&$de&'"'&$UsnJrnlParentFileReferenceNumber&'"'&$de&'"'&$UsnJrnlParentReferenceSeqNo&'"'&$de&'"'&$UsnJrnlFileAttributes&'"'&$de&'"'&$UsnJrnlMajorVersion&'"'&$de&'"'&$UsnJrnlMinorVersion&'"'&$de&'"'&$UsnJrnlSourceInfo&'"'&$de&'"'&$UsnJrnlSecurityId&'"'&@CRLF)
+				Select
+					Case $DoDefaultAll
+						FileWriteLine($UsnJrnlCsv, '"'&$OffsetRecord&'"'&$de&'"'&$UsnJrnlFileName&'"'&$de&'"'&$UsnJrnlUsn&'"'&$de&'"'&$UsnJrnlTimestamp&'"'&$de&'"'&$UsnJrnlReason&'"'&$de&'"'&$UsnJrnlFileReferenceNumber&'"'&$de&'"'&$UsnJrnlMFTReferenceSeqNo&'"'&$de&'"'&$UsnJrnlParentFileReferenceNumber&'"'&$de&'"'&$UsnJrnlParentReferenceSeqNo&'"'&$de&'"'&$UsnJrnlFileAttributes&'"'&$de&'"'&$UsnJrnlMajorVersion&'"'&$de&'"'&$UsnJrnlMinorVersion&'"'&$de&'"'&$UsnJrnlSourceInfo&'"'&$de&'"'&$UsnJrnlSecurityId&'"'&@CRLF)
+					Case $Dol2t
+						FileWriteLine($UsnJrnlCsv, '"'&'"'&StringLeft($UsnJrnlTimestamp,$CharsToGrabDate)&'"' & $de & '"'&StringMid($UsnJrnlTimestamp,$CharStartTime,$CharsToGrabTime)&'"' & $de & '"'&$UTCconfig&'"' & $de & '"'&"MACB"&'"' & $de & '"'&"UsnJrnl"&'"' & $de & '"'&"UsnJrnl:J"&'"' & $de & '"'&$UsnJrnlReason&'"' & $de & '""' & $de & '""' & $de & '""' & $de & '""' & $de & '""' & $de & '"'&$UsnJrnlFileName&'"' & $de & '"'&$UsnJrnlFileReferenceNumber&'"' & $de & '"'&"Offset:"&$OffsetRecord&" Usn:"&$UsnJrnlUsn&" MftRef:"&$UsnJrnlFileReferenceNumber&" MftRefSeqNo:"&$UsnJrnlMFTReferenceSeqNo&" ParentMftRef:"&$UsnJrnlParentFileReferenceNumber&" ParentMftRefSeqNo:"&$UsnJrnlParentReferenceSeqNo&" FileAttr:"&$UsnJrnlFileAttributes&'"' & $de & '""' & $de & '""' & @CRLF)
+					Case $DoBodyfile
+						FileWriteLine($UsnJrnlCsv, '""' & $de & '"'&$UsnJrnlFileName&'"' & $de & '"'&$UsnJrnlFileReferenceNumber&'"' & $de & '"'&"UsnJrnl"&'"' & $de & '""' & $de & '""' & $de & '""' & $de & '"'&$UsnJrnlTimestamp&'"' & $de & '"'&$UsnJrnlTimestamp&'"' & $de & '"'&$UsnJrnlTimestamp&'"' & $de & '"'&$UsnJrnlTimestamp&'"' & @CRLF)
+				EndSelect
 			Else
-				FileWriteLine($UsnJrnlCsv, $OffsetRecord&$de&$UsnJrnlFileName&$de&$UsnJrnlUsn&$de&$UsnJrnlTimestamp&$de&$UsnJrnlReason&$de&$UsnJrnlFileReferenceNumber&$de&$UsnJrnlMFTReferenceSeqNo&$de&$UsnJrnlParentFileReferenceNumber&$de&$UsnJrnlParentReferenceSeqNo&$de&$UsnJrnlFileAttributes&$de&$UsnJrnlMajorVersion&$de&$UsnJrnlMinorVersion&$de&$UsnJrnlSourceInfo&$de&$UsnJrnlSecurityId&@crlf)
+				Select
+					Case $DoDefaultAll
+						FileWriteLine($UsnJrnlCsv, $OffsetRecord&$de&$UsnJrnlFileName&$de&$UsnJrnlUsn&$de&$UsnJrnlTimestamp&$de&$UsnJrnlReason&$de&$UsnJrnlFileReferenceNumber&$de&$UsnJrnlMFTReferenceSeqNo&$de&$UsnJrnlParentFileReferenceNumber&$de&$UsnJrnlParentReferenceSeqNo&$de&$UsnJrnlFileAttributes&$de&$UsnJrnlMajorVersion&$de&$UsnJrnlMinorVersion&$de&$UsnJrnlSourceInfo&$de&$UsnJrnlSecurityId&@crlf)
+					Case $Dol2t
+						FileWriteLine($UsnJrnlCsv, StringLeft($UsnJrnlTimestamp,$CharsToGrabDate) & $de & StringMid($UsnJrnlTimestamp,$CharStartTime,$CharsToGrabTime) & $de & $UTCconfig & $de & "MACB" & $de & "UsnJrnl" & $de & "UsnJrnl:J" & $de & $UsnJrnlReason & $de & "" & $de & "" & $de & "" & $de & "" & $de & "" & $de & $UsnJrnlFileName & $de & $UsnJrnlFileReferenceNumber & $de & "Offset:"&$OffsetRecord&" Usn:"&$UsnJrnlUsn&" MftRef:"&$UsnJrnlFileReferenceNumber&" MftRefSeqNo:"&$UsnJrnlMFTReferenceSeqNo&" ParentMftRef:"&$UsnJrnlParentFileReferenceNumber&" ParentMftRefSeqNo:"&$UsnJrnlParentReferenceSeqNo&" FileAttr:"&$UsnJrnlFileAttributes & $de & "" & $de & "" & @CRLF)
+					Case $DoBodyfile
+						FileWriteLine($UsnJrnlCsv, "" & $de & $UsnJrnlFileName & $de & $UsnJrnlFileReferenceNumber & $de & "UsnJrnl" & $de & "" & $de & "" & $de & "" & $de & $UsnJrnlTimestamp & $de & $UsnJrnlTimestamp & $de & $UsnJrnlTimestamp & $de & $UsnJrnlTimestamp & @CRLF)
+				EndSelect
 			EndIf
 		EndIf
 	Else
@@ -835,7 +934,7 @@ EndFunc
 Func _WriteCSVHeader()
 	If $DoDefaultAll Then
 		$UsnJrnl_Csv_Header = "Offset"&$de&"FileName"&$de&"USN"&$de&"Timestamp"&$de&"Reason"&$de&"MFTReference"&$de&"MFTReferenceSeqNo"&$de&"MFTParentReference"&$de&"MFTParentReferenceSeqNo"&$de&"FileAttributes"&$de&"MajorVersion"&$de&"MinorVersion"&$de&"SourceInfo"&$de&"SecurityId"
-	ElseIf $dol2t Then
+	ElseIf $Dol2t Then
 		$UsnJrnl_Csv_Header = "Date"&$de&"Time"&$de&"Timezone"&$de&"MACB"&$de&"Source"&$de&"SourceType"&$de&"Type"&$de&"User"&$de&"Host"&$de&"Short"&$de&"Desc"&$de&"Version"&$de&"Filename"&$de&"Inode"&$de&"Notes"&$de&"Format"&$de&"Extra"
 	ElseIf $DoBodyfile Then
 		$UsnJrnl_Csv_Header = "MD5"&$de&"name"&$de&"inode"&$de&"mode_as_string"&$de&"UID"&$de&"GID"&$de&"size"&$de&"atime"&$de&"mtime"&$de&"ctime"&$de&"crtime"
@@ -895,7 +994,7 @@ Func _GetUTCRegion($UTCRegion)
 	Else
 		$part1 = $UTCRegion
 	EndIf
-	Global $UTCconfig = $part1
+	$UTCconfig = $part1
 	If StringRight($part1,2) = "15" Then $part1 = StringReplace($part1,".15",".25")
 	If StringRight($part1,2) = "30" Then $part1 = StringReplace($part1,".30",".50")
 	If StringRight($part1,2) = "45" Then $part1 = StringReplace($part1,".45",".75")
@@ -1151,7 +1250,7 @@ Func _GetInputParams()
 	If StringLen($CheckUnicode) > 0 Then
 		If $CheckUnicode <> 0 And $CheckUnicode <> 1 Then
 			ConsoleWrite("Error: Incorect Unicode: " & $CheckUnicode & @CRLF)
-			Exit
+			Exit(1)
 		EndIf
 	Else
 		$CheckUnicode = 1
@@ -1160,7 +1259,7 @@ Func _GetInputParams()
 	If StringLen($CheckExtendedNameCheckChar) > 0 Then
 		If $CheckExtendedNameCheckChar <> 0 And $CheckExtendedNameCheckChar <> 1 Then
 			ConsoleWrite("Error: Incorect TestFilenameChar: " & $CheckExtendedNameCheckChar & @CRLF)
-			Exit
+			Exit(1)
 		EndIf
 	Else
 		$CheckExtendedNameCheckChar = 1
@@ -1169,7 +1268,7 @@ Func _GetInputParams()
 	If StringLen($CheckExtendedNameCheckWindows) > 0 Then
 		If $CheckExtendedNameCheckWindows <> 0 And $CheckExtendedNameCheckWindows <> 1 Then
 			ConsoleWrite("Error: Incorect TestFilenameWindows: " & $CheckExtendedNameCheckWindows & @CRLF)
-			Exit
+			Exit(1)
 		EndIf
 	Else
 		$CheckExtendedNameCheckWindows = 1
@@ -1178,7 +1277,7 @@ Func _GetInputParams()
 	If StringLen($CheckExtendedTimestampCheck) > 0 Then
 		If $CheckExtendedTimestampCheck <> 0 And $CheckExtendedTimestampCheck <> 1 Then
 			ConsoleWrite("Error: Incorect TestTimestamp: " & $CheckExtendedTimestampCheck & @CRLF)
-			Exit
+			Exit(1)
 		EndIf
 	Else
 		$CheckExtendedTimestampCheck = 1
@@ -1260,23 +1359,20 @@ Func _GetInputParams()
 	If StringLen($File) > 0 Then
 		If Not FileExists($File) Then
 			ConsoleWrite("Error input $UsnJrnl file does not exist." & @CRLF)
-			Exit
+			Exit(1)
 		EndIf
 	EndIf
-#cs
+
 	If StringLen($OutputFormat) > 0 Then
-		If $OutputFormat = "l2t" Then $checkl2t = 1
-		If $OutputFormat = "bodyfile" Then $checkbodyfile = 1
-		If $OutputFormat = "all" Then $checkdefaultall = 1
-		If $checkl2t + $checkbodyfile = 0 Then $checkdefaultall = 1
+		If $OutputFormat = "l2t" Then $Dol2t = True
+		If $OutputFormat = "bodyfile" Then $DoBodyfile = True
+		If $OutputFormat = "all" Then $DoDefaultAll = True
+		If $Dol2t = False And $DoBodyfile = False Then $DoDefaultAll = True
+
 	Else
-		$checkdefaultall = 1
+		$DoDefaultAll = True
 	EndIf
-#ce
-	$checkdefaultall = 1
-	$DoDefaultAll = 1
-	$dol2t = 0
-	$DoBodyfile = 0
+
 
 	If StringLen($PrecisionSeparator) <> 1 Then $PrecisionSeparator = "."
 	If StringLen($SeparatorInput) <> 1 Then $SeparatorInput = "|"
@@ -1305,6 +1401,11 @@ Func _GetInputParams()
 		$DateTimeFormat = 6
 	EndIf
 
+	If ($DateTimeFormat = 4 Or $DateTimeFormat = 5) And ($checkl2t + $checkbodyfile > 0) Then
+		ConsoleWrite("Error: TSFormat can't be 4 or 5 in combination with OutputFormat l2t and bodyfile" & @CRLF)
+		Exit(1)
+	EndIf
+
 	If StringLen($VerifyFragment) > 0 Then
 		If $VerifyFragment <> 1 Then
 			$VerifyFragment = 0
@@ -1314,7 +1415,7 @@ Func _GetInputParams()
 	If StringLen($OutFragmentName) > 0 Then
 		If StringInStr($OutFragmentName,"\") Then
 			ConsoleWrite("Error: OutFragmentName must be a filename and not a path." & @CRLF)
-			Exit
+			Exit(1)
 		EndIf
 	EndIf
 
@@ -1403,4 +1504,25 @@ Func _WriteOutputFragment()
 	_WinAPI_SetFilePointerEx($hFileOut, $Offset, $FILE_BEGIN)
 	If Not _WinAPI_WriteFile($hFileOut, DllStructGetPtr($tBuffer), DllStructGetSize($tBuffer), $nBytes) Then Return SetError(1)
 	_WinAPI_CloseHandle($hFileOut)
+EndFunc
+
+Func _SetDateTimeFormats()
+	Select
+		Case $DateTimeFormat = 1
+			$CharsToGrabDate = 8
+			$CharStartTime = 9
+			$CharsToGrabTime = 6
+		Case $DateTimeFormat = 2
+			$CharsToGrabDate = 10
+			$CharStartTime = 11
+			$CharsToGrabTime = 8
+		Case $DateTimeFormat = 3
+			$CharsToGrabDate = 10
+			$CharStartTime = 11
+			$CharsToGrabTime = 8
+		Case $DateTimeFormat = 6
+			$CharsToGrabDate = 10
+			$CharStartTime = 11
+			$CharsToGrabTime = 8
+	EndSelect
 EndFunc
