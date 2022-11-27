@@ -7,11 +7,13 @@
 #AutoIt3Wrapper_Change2CUI=y
 #AutoIt3Wrapper_Res_Comment=Parser for $UsnJrnl (NTFS)
 #AutoIt3Wrapper_Res_Description=Parser for $UsnJrnl (NTFS)
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.23
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.24
 #AutoIt3Wrapper_Res_requestedExecutionLevel=asInvoker
 #AutoIt3Wrapper_AU3Check_Parameters=-w 3 -w 5
 #AutoIt3Wrapper_Run_Au3Stripper=y
+#Au3Stripper_Parameters=/sf /sv /rm /pe
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
+
 #Include <WinAPIEx.au3>
 #Include <File.au3>
 #include <GUIConstantsEx.au3>
@@ -20,27 +22,30 @@
 #include <EditConstants.au3>
 #include <GuiEdit.au3>
 #Include <FileConstants.au3>
-Global $UsnJrnlCsv, $UsnJrnlCsvFile, $UsnJrnlDbfile, $de="|", $PrecisionSeparator=".", $PrecisionSeparator2="", $sOutputFile, $VerboseOn=false, $SurroundingQuotes=True, $PreviousUsn, $DoDefaultAll, $Dol2t, $DoBodyfile, $hDebugOutFile
-Global $_COMMON_KERNEL32DLL=DllOpen("kernel32.dll"), $outputpath=@ScriptDir, $File, $MaxPages, $CurrentPage, $WithQuotes, $EncodingWhenOpen=2
+
+Global $UsnJrnlCsv, $UsnJrnlCsvFile, $OutputPath = @ScriptDir, $TargetOutputPath = @ScriptDir, $UsnJrnlSqlFile, $DebugOutFile, $hDebugOutFile
+Global $de="|", $PrecisionSeparator=".", $PrecisionSeparator2="", $sOutputFile, $VerboseOn=false, $SurroundingQuotes=True, $PreviousUsn, $DoDefaultAll, $Dol2t, $DoBodyfile
+Global $_COMMON_KERNEL32DLL=DllOpen("kernel32.dll"), $File, $MaxPages, $CurrentPage, $WithQuotes, $EncodingWhenOpen=128
 Global $ProgressStatus, $ProgressUsnJrnl
 Global $begin, $ElapsedTime, $EntryCounter, $DoScanMode1=0, $DoScanMode=0, $DoNormalMode=1, $SectorSize=512, $ExtendedNameCheckChar=1, $ExtendedNameCheckWindows=1, $ExtendedNameCheckAll=1, $ExtendedTimestampCheck=1
 Global $tDelta = _WinTime_GetUTCToLocalFileTimeDelta()
 Global $DateTimeFormat,$ExampleTimestampVal = "01CD74B3150770B8",$TimestampPrecision=3, $UTCconfig
 Global $TimestampErrorVal = "0000-00-00 00:00:00"
 Global $USN_Page_Size = 4096, $Remainder="", $nBytes
-Global $ParserOutDir = @ScriptDir, $VerifyFragment=0, $OutFragmentName="OutFragment.bin", $RebuiltFragment, $CleanUp=0, $DebugOutFile
+Global $VerifyFragment=0, $OutFragmentName="OutFragment.bin", $RebuiltFragment, $CleanUp=0
 Global $myctredit, $CheckUnicode, $checkl2t, $checkbodyfile, $checkdefaultall, $SeparatorInput, $checkquotes, $CheckExtendedNameCheckChar, $CheckExtendedNameCheckWindows, $CheckExtendedTimestampCheck
 Global $CharsToGrabDate, $CharStartTime, $CharsToGrabTime
+Global $GlobalStartOffset=0, $StartOffsetInput
 
-$Progversion = "UsnJrnl2Csv 1.0.0.23"
+$Progversion = "UsnJrnl2Csv 1.0.0.24"
 If $cmdline[0] > 0 Then
-	$CommandlineMode = 1
+	$CommandlineMode = True
 	ConsoleWrite($Progversion & @CRLF)
 	_GetInputParams()
 	_Main()
 Else
 	DllCall("kernel32.dll", "bool", "FreeConsole")
-	$CommandlineMode = 0
+	$CommandlineMode = False
 
 	$Form = GUICreate($Progversion, 700, 350, -1, -1)
 
@@ -103,8 +108,13 @@ Else
 	$ButtonOutput = GUICtrlCreateButton("Change Output", 580, 70, 100, 20)
 	$ButtonInput = GUICtrlCreateButton("Browse $UsnJrnl", 580, 95, 100, 20)
 	$ButtonStart = GUICtrlCreateButton("Start Parsing", 580, 120, 100, 20)
-	$myctredit = GUICtrlCreateEdit("Current output folder: " & $outputpath & @CRLF, 0, 170, 700, 100, BitOR($ES_AUTOVSCROLL,$WS_VSCROLL))
-	_GUICtrlEdit_SetLimitText($myctredit, 128000)
+
+	$LabelUsnPageSize = GUICtrlCreateLabel("Offset:",525,145,40,20)
+	$StartOffsetInput = GUICtrlCreateInput(0x0,570,145,120,20)
+
+	$myctredit = GUICtrlCreateEdit("Current output folder: " & $outputpath & @CRLF, 0, 170, 700, 100, BitOR($ES_AUTOVSCROLL, $WS_VSCROLL, $ES_READONLY))
+	GUICtrlSetBkColor($myctredit, 0xFFFFFF)
+	;_GUICtrlEdit_SetLimitText($myctredit, 128000)
 
 	_InjectTimeZoneInfo()
 	_InjectTimestampFormat()
@@ -124,10 +134,11 @@ Else
 		_TranslateTimestamp()
 		Select
 			Case $nMsg = $ButtonOutput
-				$newoutputpath = FileSelectFolder("Select output folder.", "",7,$ParserOutDir)
+				$TargetOutputPath = FileSelectFolder("Select output folder.", "", 7, $OutputPath)
 				If Not @error then
-					_DisplayInfo("New output folder: " & $newoutputpath & @CRLF)
-					$ParserOutDir = $newoutputpath
+					_DisplayInfo("New output folder: " & $TargetOutputPath & @CRLF)
+				Else
+					$TargetOutputPath = @ScriptDir
 				EndIf
 			Case $nMsg = $ButtonInput
 				$File = FileOpenDialog("Select $UsnJrnl file",@ScriptDir,"All (*.*)")
@@ -148,6 +159,18 @@ Func _Main()
 	GUICtrlSetData($ProgressUsnJrnl, 0)
 
 	If Not $CommandlineMode Then
+		$CheckUnicode = GUICtrlRead($CheckUnicode)
+	EndIf
+
+	If $CheckUnicode = 1 Then
+		$EncodingWhenOpen = BitOR($FO_OVERWRITE, $FO_UTF8)
+		If Not $CommandlineMode Then _DisplayInfo("UNICODE configured" & @CRLF)
+	Else
+		$EncodingWhenOpen = BitOR($FO_OVERWRITE, $FO_ANSI)
+		If Not $CommandlineMode Then _DisplayInfo("ANSI configured" & @CRLF)
+	EndIf
+
+	If Not $CommandlineMode Then
 		If Int(GUICtrlRead($checkl2t) + GUICtrlRead($checkbodyfile) + GUICtrlRead($checkdefaultall)) <> 9 Then
 			_DisplayInfo("Error: Output format must be set to 1 of the 3 options." & @CRLF)
 			Return
@@ -164,6 +187,8 @@ Func _Main()
 		EndIf
 	EndIf
 
+	_CreateOutputStructureAndFiles()
+
 	If Not $CommandlineMode Then
 		If ($DateTimeFormat = 4 Or $DateTimeFormat = 5) And ($Dol2t Or $DoBodyfile) Then
 			_DisplayInfo("Error: Timestamp format can't be 4 or 5 in combination with OutputFormat log2timeline and bodyfile" & @CRLF)
@@ -176,6 +201,13 @@ Func _Main()
 	Else
 		$de = $SeparatorInput
 	EndIf
+
+	If Not $CommandlineMode Then
+		$GlobalStartOffset = GUICtrlRead($StartOffsetInput)
+	Else
+		$GlobalStartOffset = $StartOffsetInput
+	EndIf
+
 
 	If Not $CommandlineMode Then
 		$TimestampErrorVal = GUICtrlRead($TimestampErrorInput)
@@ -204,22 +236,6 @@ Func _Main()
 			Return
 		EndIf
 		$tDelta = $tDelta*-1 ;Since delta is substracted from timestamp later on
-	EndIf
-
-	If $CommandlineMode Then
-		$TestUnicode = $CheckUnicode
-	Else
-		$TestUnicode = GUICtrlRead($CheckUnicode)
-	EndIf
-
-	If $TestUnicode = 1 Then
-		;$EncodingWhenOpen = 2+32 ;ucs2
-		$EncodingWhenOpen = 2+128 ;utf8 w/bom
-		If Not $CommandlineMode Then _DisplayInfo("UNICODE configured" & @CRLF)
-	Else
-		$TestUnicode = 0
-		$EncodingWhenOpen = 2
-		If Not $CommandlineMode Then _DisplayInfo("ANSI configured" & @CRLF)
 	EndIf
 
 	If $CommandlineMode Then
@@ -295,31 +311,14 @@ Func _Main()
 		Return
 	EndIf
 
-	$TimestampStart = @YEAR & "-" & @MON & "-" & @MDAY & "_" & @HOUR & "-" & @MIN & "-" & @SEC
-
-	$UsnJrnlCsvFile = $ParserOutDir & "\UsnJrnl_"&$TimestampStart&".csv"
-	$UsnJrnlCsv = FileOpen($UsnJrnlCsvFile, $EncodingWhenOpen)
-	If @error Then
-		If Not $CommandlineMode Then _DisplayInfo("Error creating: " & $UsnJrnlCsvFile & @CRLF)
-		_DumpOutput("Error creating: " & $UsnJrnlCsvFile & @CRLF)
-		Return
-	EndIf
-
-	$DebugOutFile = $ParserOutDir & "\UsnJrnl_"&$TimestampStart&".log"
-	$hDebugOutFile = FileOpen($DebugOutFile, $EncodingWhenOpen)
-	If @error Then
-		ConsoleWrite("Error: Could not create log file" & @CRLF)
-		MsgBox(0,"Error","Could not create log file")
-		Exit
-	EndIf
-
 	_DumpOutput("Using $UsnJrnl: " & $File & @CRLF)
 	_DumpOutput("Quotes configuration: " & $WithQuotes & @CRLF)
 	_DumpOutput("USN_PAGE_SIZE: " & $USN_Page_Size & @CRLF)
-	_DumpOutput("UNICODE configuration: " & $TestUnicode & @CRLF)
+	_DumpOutput("UNICODE configuration: " & $CheckUnicode & @CRLF)
 	_DumpOutput("Extended timestamp check: " & $ExtendedTimestampCheck & @CRLF)
 	_DumpOutput("Extended filename check Windows: " & $ExtendedNameCheckWindows & @CRLF)
 	_DumpOutput("Extended filename check Char: " & $ExtendedNameCheckChar & @CRLF)
+	_DumpOutput("Start offset: " & $GlobalStartOffset & @CRLF)
 
 	If Not $CommandlineMode Then
 		If GUICtrlRead($CheckScanMode) = 1 Then
@@ -341,20 +340,6 @@ Func _Main()
 	_DumpOutput("Using precision separator: " & $PrecisionSeparator & @CRLF)
 ;	_DumpOutput("------------------- END CONFIGURATION -----------------------" & @CRLF)
 
-	$UsnJrnlSqlFile = $ParserOutDir & "\UsnJrnl_"&$TimestampStart&".sql"
-	Select
-		Case $DoDefaultAll
-			FileInstall(".\import-sql\import-csv-usnjrnl.sql", $UsnJrnlSqlFile)
-		Case $Dol2t
-			FileInstall(".\import-sql\import-csv-l2t-usnjrnl.sql", $UsnJrnlSqlFile)
-		Case $DoBodyfile
-			FileInstall(".\import-sql\import-csv-bodyfile-usnjrnl.sql", $UsnJrnlSqlFile)
-	EndSelect
-	$FixedPath = StringReplace($UsnJrnlCsvFile, "\","\\")
-	Sleep(500)
-	_ReplaceStringInFile($UsnJrnlSqlFile, "__PathToCsv__", $FixedPath)
-	If $TestUnicode = 1 Then _ReplaceStringInFile($UsnJrnlSqlFile, "latin1", "utf8")
-	_ReplaceStringInFile($UsnJrnlSqlFile, "__Separator__", $de)
 
 	_SetDateTimeFormats()
 
@@ -366,7 +351,6 @@ Func _Main()
 	Local $TimestampFormatTransform
 	If $DoDefaultAll Or $DoBodyfile Then
 		;usnrnl or bodyfile table
-
 
 		Select
 			Case $DateTimeFormat = 1
@@ -432,8 +416,9 @@ Func _Main()
 
 	$InputFileSize = _WinAPI_GetFileSizeEx($hFile)
 	_DumpOutput("InputFileSize: " & $InputFileSize & " bytes" & @CRLF)
+	$InputFileSize -= $GlobalStartOffset
 
-	AdlibRegister("_UsnJrnlProgress", 500)
+	AdlibRegister("_UsnJrnlProgress", 1000)
 
 	Select
 
@@ -442,7 +427,7 @@ Func _Main()
 			$MaxPages = Ceiling($InputFileSize/$USN_Page_Size)
 			For $i = 0 To $MaxPages-1
 				$CurrentPage=$i
-				_WinAPI_SetFilePointerEx($hFile, $i*$USN_Page_Size, $FILE_BEGIN)
+				_WinAPI_SetFilePointerEx($hFile, $GlobalStartOffset + ($i * $USN_Page_Size), $FILE_BEGIN)
 				If $i = $MaxPages-1 Then $tBuffer = DllStructCreate("byte[" & $USN_Page_Size & "]")
 				_WinAPI_ReadFile($hFile, DllStructGetPtr($tBuffer), $USN_Page_Size, $nBytes)
 				$RawPage = DllStructGetData($tBuffer, 1)
@@ -458,7 +443,7 @@ Func _Main()
 			$MaxPages = Ceiling($InputFileSize/($ChunkSize))
 			For $i = 0 To $MaxPages-1
 				$CurrentPage=$i
-				_WinAPI_SetFilePointerEx($hFile, $i*($ChunkSize), $FILE_BEGIN)
+				_WinAPI_SetFilePointerEx($hFile, $GlobalStartOffset + ($i * $ChunkSize), $FILE_BEGIN)
 				If $i = $MaxPages-1 Then $tBuffer = DllStructCreate("byte[" & ($ChunkSize)+$SectorSize & "]")
 				_WinAPI_ReadFile($hFile, DllStructGetPtr($tBuffer), ($ChunkSize)+$SectorSize, $nBytes)
 				$RawPage = DllStructGetData($tBuffer, 1)
@@ -500,7 +485,6 @@ Func _Main()
 	EndIf
 
 	If Not $CommandlineMode Then _DisplayInfo("Entries parsed: " & $EntryCounter & @CRLF)
-	_DumpOutput("Pages processed: " & $MaxPages & @CRLF)
 	_DumpOutput("Entries parsed: " & $EntryCounter & @CRLF)
 	If Not $CommandlineMode Then _DisplayInfo("Parsing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
 	_DumpOutput("Parsing finished in " & _WinAPI_StrFromTimeInterval(TimerDiff($begin)) & @CRLF)
@@ -584,14 +568,14 @@ Func _UsnDecodeRecord($Record, $OffsetRecord)
 			_WriteOutputFragment()
 			If @error Then
 				If Not $CommandlineMode Then
-					_DisplayInfo("Output fragment was verified but could not be written to: " & $ParserOutDir & "\" & $OutFragmentName & @CRLF)
+					_DisplayInfo("Output fragment was verified but could not be written to: " & $OutputPath & "\" & $OutFragmentName & @CRLF)
 					Return SetError(1)
 				Else
-					_DumpOutput("Output fragment was verified but could not be written to: " & $ParserOutDir & "\" & $OutFragmentName & @CRLF)
+					_DumpOutput("Output fragment was verified but could not be written to: " & $OutputPath & "\" & $OutFragmentName & @CRLF)
 					Exit(4)
 				EndIf
 			Else
-				ConsoleWrite("Output fragment verified and written to: " & $ParserOutDir & "\" & $OutFragmentName & @CRLF)
+				ConsoleWrite("Output fragment verified and written to: " & $OutputPath & "\" & $OutFragmentName & @CRLF)
 			EndIf
 		Else
 			If $WithQuotes Then
@@ -924,7 +908,7 @@ Func _WinTime_FormatTime($iYear,$iMonth,$iDay,$iHour,$iMin,$iSec,$iMilSec,$iDayO
 EndFunc
 
 Func _DisplayInfo($DebugInfo)
-	GUICtrlSetData($myctredit, $DebugInfo, 1)
+	_GUICtrlEdit_AppendText($myctredit, $DebugInfo)
 EndFunc
 
 Func _DisplayProgress()
@@ -1216,7 +1200,7 @@ Func _GetInputParams()
 	For $i = 1 To $cmdline[0]
 		;ConsoleWrite("Param " & $i & ": " & $cmdline[$i] & @CRLF)
 		If StringLeft($cmdline[$i],13) = "/UsnJrnlFile:" Then $File = StringMid($cmdline[$i],14)
-		If StringLeft($cmdline[$i],12) = "/OutputPath:" Then $ParserOutDir = StringMid($cmdline[$i],13)
+		If StringLeft($cmdline[$i],12) = "/OutputPath:" Then $TargetOutputPath = StringMid($cmdline[$i],13)
 		If StringLeft($cmdline[$i],10) = "/TimeZone:" Then $TimeZone = StringMid($cmdline[$i],11)
 		If StringLeft($cmdline[$i],14) = "/OutputFormat:" Then $OutputFormat = StringMid($cmdline[$i],15)
 		If StringLeft($cmdline[$i],11) = "/Separator:" Then $SeparatorInput = StringMid($cmdline[$i],12)
@@ -1235,16 +1219,17 @@ Func _GetInputParams()
 		If StringLeft($cmdline[$i],16) = "/VerifyFragment:" Then $VerifyFragment = StringMid($cmdline[$i],17)
 		If StringLeft($cmdline[$i],17) = "/OutFragmentName:" Then $OutFragmentName = StringMid($cmdline[$i],18)
 		If StringLeft($cmdline[$i],9) = "/CleanUp:" Then $CleanUp = StringMid($cmdline[$i],10)
+		If StringLeft($cmdline[$i],13) = "/StartOffset:" Then $StartOffsetInput = StringMid($cmdline[$i],14)
 	Next
 
-	If StringLen($ParserOutDir) > 0 Then
-		If DirGetSize($ParserOutDir) = -1 Then
-			DirCreate($ParserOutDir)
+	If StringLen($TargetOutputPath) > 0 Then
+		If DirGetSize($TargetOutputPath) = -1 Then
+			DirCreate($TargetOutputPath)
 		Else
-			ConsoleWrite("Warning: Output directory already exist: " & $ParserOutDir & @CRLF)
+			ConsoleWrite("Warning: Output directory already exist: " & $TargetOutputPath & @CRLF)
 		EndIf
 	Else
-		$ParserOutDir = @ScriptDir
+		$TargetOutputPath = @ScriptDir
 	EndIf
 
 	If StringLen($CheckUnicode) > 0 Then
@@ -1424,6 +1409,14 @@ Func _GetInputParams()
 			$CleanUp = 0
 		EndIf
 	EndIf
+
+	If StringLen($StartOffsetInput) > 0 Then
+		If StringIsDigit($StartOffsetInput) = 0 Then
+			$StartOffsetInput = 0
+		Else
+			$StartOffsetInput = Number($StartOffsetInput)
+		EndIf
+	EndIf
 EndFunc
 
 Func _ValidateCharacter($InputString)
@@ -1493,7 +1486,7 @@ Func _WriteOutputFragment()
 	Local $tBuffer = DllStructCreate("byte[" & $Size2 & "]")
 	DllStructSetData($tBuffer,1,$RebuiltFragment)
 	If @error Then Return SetError(1)
-	Local $OutFile = $ParserOutDir & "\" & $OutFragmentName
+	Local $OutFile = $OutputPath & "\" & $OutFragmentName
 	If Not FileExists($OutFile) Then
 		$Offset = 0
 	Else
@@ -1525,4 +1518,53 @@ Func _SetDateTimeFormats()
 			$CharStartTime = 11
 			$CharsToGrabTime = 8
 	EndSelect
+EndFunc
+
+Func _CreateOutputStructureAndFiles()
+
+	; Output is already defined either explicitly or else default to current dir.
+
+	Local $TimestampStart = @YEAR & "-" & @MON & "-" & @MDAY & "_" & @HOUR & "-" & @MIN & "-" & @SEC
+
+	;$OutputPath = $TargetOutputPath&"\UsnJrnl2Csv_"&$TimestampStart
+	$OutputPath = $TargetOutputPath
+	If DirCreate($OutputPath) = 0 Then
+		ConsoleWrite("Error creating: " & $OutputPath & @CRLF)
+		Exit
+	EndIf
+
+	;$DebugOutFile = $OutputPath & "\UsnJrnl.log"
+	$DebugOutFile = $OutputPath & "\UsnJrnl_"&$TimestampStart&".log"
+	$hDebugOutFile = FileOpen($DebugOutFile, $EncodingWhenOpen)
+	If @error Then
+		ConsoleWrite("Error: Could not create log file" & @CRLF)
+		MsgBox(0,"Error","Could not create log file")
+		Exit
+	EndIf
+
+	;$UsnJrnlCsvFile = $OutputPath & "\UsnJrnl.csv"
+	$UsnJrnlCsvFile = $OutputPath & "\UsnJrnl_"&$TimestampStart&".csv"
+	$UsnJrnlCsv = FileOpen($UsnJrnlCsvFile, $EncodingWhenOpen)
+	If @error Then
+		If Not $CommandlineMode Then _DisplayInfo("Error creating: " & $UsnJrnlCsvFile & @CRLF)
+		_DumpOutput("Error creating: " & $UsnJrnlCsvFile & @CRLF)
+		Return
+	EndIf
+
+	;$UsnJrnlSqlFile = $OutputPath & "\UsnJrnl.sql"
+	$UsnJrnlSqlFile = $OutputPath & "\UsnJrnl_"&$TimestampStart&".sql"
+	Select
+		Case $DoDefaultAll
+			FileInstall(".\import-sql\import-csv-usnjrnl.sql", $UsnJrnlSqlFile)
+		Case $Dol2t
+			FileInstall(".\import-sql\import-csv-l2t-usnjrnl.sql", $UsnJrnlSqlFile)
+		Case $DoBodyfile
+			FileInstall(".\import-sql\import-csv-bodyfile-usnjrnl.sql", $UsnJrnlSqlFile)
+	EndSelect
+	Local $FixedPath = StringReplace($UsnJrnlCsvFile, "\","\\")
+	Sleep(500)
+	_ReplaceStringInFile($UsnJrnlSqlFile, "__PathToCsv__", $FixedPath)
+	If $CheckUnicode = 1 Then _ReplaceStringInFile($UsnJrnlSqlFile, "latin1", "utf8")
+	_ReplaceStringInFile($UsnJrnlSqlFile, "__Separator__", $de)
+
 EndFunc

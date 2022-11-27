@@ -74,7 +74,8 @@ Boolean value for activating a simple validation on a fragment only, and not ful
 The output filename to write the fixed fragment to, if /VerifyFragment: is set to 1. If omitted, the default filename is OutFragment.bin.
 /CleanUp:
 Boolean value for cleaning up all output if no entries could be decoded. Default value is 1. Can be 0 or 1. This setting makes the most sense if program is run in loop in batch or similar.
-
+/StartOffset:
+An optional integer for offset to start parsing at. Defaults to 0.
 
 The available TimeZone's to use are:
 -12.00

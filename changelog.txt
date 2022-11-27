@@ -1,5 +1,11 @@
 UsnJrnl2Csv Changelog
 
+1.0.0.24
+Added an optional start offset configuration.
+Fixed minor GUI bug.
+Various minor changes, reshuffling of code and removing unused code.
+Changed license to MIT.
+
 1.0.0.23
 Added support for new output formats; bodyfile and log2timeline.
 Added db schemas for the new output formats.
